@@ -13,8 +13,8 @@
 
 ### Phase 2: 백엔드 개발 (Backend First)
 
-- [ ] **3. Nest.js 백엔드 프로젝트 초기화**: `apps/backend`에 Nest.js 프로젝트를 생성하고, `packages/types` 공유 패키지 연동
-- [ ] **4. Mock API 엔드포인트 구현**: `api.md` 명세에 따라 `/api/profile`, `/api/chat` 컨트롤러 및 라우팅 설정 (초기에는 Mock 데이터 반환)
+- [x] **3. Nest.js 백엔드 프로젝트 초기화**: `apps/backend`에 Nest.js 프로젝트를 생성하고, `apps/types` 공유 패키지 연동
+- [x] **4. Mock API 엔드포인트 구현**: `api.md` 명세에 따라 `/api/profile`, `/api/chat` 컨트롤러 및 라우팅 설정 (초기에는 Mock 데이터 반환)
 - [ ] **5. 로컬 스토리지 서비스 구현**: `user_profile.json` 파일을 읽고 쓰는 `StorageService`를 구현하고 Profile API에 연동
 - [ ] **6. 개별 AI 에이전트 서비스 구현**: LangChain.js와 Gemini API를 사용하여 `NewsAgent`, `CorrectionAgent`, `ConversationAgent` 등 `agent_network.md`에 명시된 각 에이전트 로직을 서비스로 구현
 - [ ] **7. 오케스트레이터 서비스 구현**: 개별 에이전트 서비스를 순서대로 호출하고, 최종 결과를 스트리밍으로 반환하는 `OrchestratorService`를 구현하여 `/api/chat` API에 연결
