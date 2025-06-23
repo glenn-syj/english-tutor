@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+1. `.md` files in `/documents` directory should be written in Korean.
+
+
+2. Code blocks for system prompts should be maintained in English.
