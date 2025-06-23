@@ -4,43 +4,25 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  NotFoundException,
   Post,
 } from '@nestjs/common';
 import { UserProfile } from '../../../types/src';
+import { ProfileService } from './profile.service';
 
 @Controller('profile')
 export class ProfileController {
-  private userProfile: UserProfile | null = {
-    userName: 'Alex',
-    interests: ['Tech', 'Travel'],
-    learningLevel: 'Intermediate',
-    recentCorrections: [
-      {
-        original: 'I am go to school.',
-        corrected: 'I am going to school.',
-        timestamp: '2023-10-27T10:00:00Z',
-      },
-    ],
-  };
+  constructor(private readonly profileService: ProfileService) {}
 
   @Get()
-  getProfile(): UserProfile {
-    if (!this.userProfile) {
-      throw new NotFoundException('User profile not found.');
-    }
-    return this.userProfile;
+  async getProfile(): Promise<UserProfile> {
+    return this.profileService.getProfile();
   }
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  createProfile(
+  @HttpCode(HttpStatus.OK)
+  async createOrUpdateProfile(
     @Body() profile: Omit<UserProfile, 'recentCorrections'>,
-  ): UserProfile {
-    this.userProfile = {
-      ...profile,
-      recentCorrections: [],
-    };
-    return this.userProfile;
+  ): Promise<UserProfile> {
+    return this.profileService.createOrUpdateProfile(profile);
   }
 }

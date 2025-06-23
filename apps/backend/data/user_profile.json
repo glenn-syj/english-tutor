@@ -1,0 +1,12 @@
+{
+  "userName": "Alex",
+  "interests": ["Tech", "Travel"],
+  "learningLevel": "Intermediate",
+  "recentCorrections": [
+    {
+      "original": "I am go to school.",
+      "corrected": "I am going to school.",
+      "timestamp": "2023-10-27T10:00:00Z"
+    }
+  ]
+}
