@@ -1,7 +1,8 @@
-import { Body, Controller, Post, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Body, Controller, Post, Sse } from '@nestjs/common';
 import { ChatMessage } from '../../../types/src';
-import { Readable } from 'stream';
+import { OrchestratorService } from './orchestrator.service';
+import { Observable, from } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 interface ChatRequestBody {
   history: ChatMessage[];
@@ -10,38 +11,25 @@ interface ChatRequestBody {
 
 @Controller('chat')
 export class ChatController {
+  constructor(private readonly orchestratorService: OrchestratorService) {}
+
+  @Sse()
   @Post()
   async handleChat(
     @Body() body: ChatRequestBody,
-    @Res() res: Response,
-  ): Promise<void> {
-    // Mock streaming response based on api.md
-    const mockResponseTokens = [
-      'Hello! ',
-      'I can ',
-      'certainly ',
-      'help you ',
-      'with that.',
-    ];
+  ): Promise<Observable<{ data: string }>> {
+    const stream = await this.orchestratorService.process(
+      body.history,
+      body.message,
+    );
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
+    const textDecoder = new TextDecoder();
+    const observable = from(stream).pipe(
+      map((chunk) => {
+        return { data: textDecoder.decode(chunk as Uint8Array) };
+      }),
+    );
 
-    const stream = new Readable({
-      read() {},
-    });
-
-    stream.pipe(res);
-
-    for (const token of mockResponseTokens) {
-      await new Promise((resolve) => setTimeout(resolve, 200)); // Simulate chunk delay
-      stream.push(`data: ${token}\n\n`);
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    stream.push(`data: [DONE]\n\n`);
-    stream.push(null); // End the stream
+    return observable;
   }
 }
