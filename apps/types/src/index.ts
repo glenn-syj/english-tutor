@@ -1,17 +1,49 @@
 export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
+  sender: "user" | "ai";
+  timestamp: string;
+  text: string;
 }
 
-export interface Correction {
+export interface CorrectionWithErrors {
+  has_errors: true;
   original: string;
   corrected: string;
-  timestamp: string;
+  explanation: string;
 }
+
+export interface CorrectionNoErrors {
+  has_errors: false;
+  feedback: string;
+}
+
+export type Correction = CorrectionWithErrors | CorrectionNoErrors;
 
 export interface UserProfile {
   userName: string;
   interests: string[];
-  learningLevel: "Beginner" | "Intermediate" | "Advanced";
-  recentCorrections: Correction[];
+  learningLevel: string;
+  recentCorrections: CorrectionWithErrors[];
+}
+
+export interface NewsArticle {
+  title: string;
+  source: string;
+  url: string;
+  fullText: string;
+}
+
+export interface NewsAnalysis {
+  summary: string;
+  vocabulary: {
+    word: string;
+    definition: string;
+  }[];
+  questions: string[];
+}
+
+export interface OrchestratorInput {
+  userProfile: UserProfile;
+  newsAnalysis: NewsAnalysis;
+  correction: Correction;
+  chatHistory: ChatMessage[];
 }
