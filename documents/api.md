@@ -102,12 +102,12 @@ AI 에이전트와 실시간 대화를 수행합니다.
 
 ---
 
-## 3. 공유 데이터 타입 (`packages/types`)
+## 3. 공유 데이터 타입 (`apps/types`)
 
 프론트엔드와 백엔드 간의 데이터 일관성을 위해 모노레포의 공유 패키지에서 아래와 같은 타입을 정의하고 사용합니다.
 
 ```typescript
-// packages/types/src/index.ts
+// apps/types/index.ts
 
 export interface ChatMessage {
   role: "user" | "assistant";

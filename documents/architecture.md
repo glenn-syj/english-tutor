@@ -42,15 +42,11 @@ graph LR
         subgraph "apps"
             FE[frontend]
             BE[backend]
-        end
-        subgraph "packages"
             Types[types]
-            Utils[utils]
         end
     end
     FE --> Types
     BE --> Types
-    FE & BE --> Utils
 ```
 
 ## 2. 컴포넌트 상세 설명
@@ -85,7 +81,7 @@ graph TB
 ### 2.3. 공유 타입 시스템
 
 ```typescript
-// packages/types/src/chat.ts 예시
+// apps/types/src/chat.ts 예시
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
