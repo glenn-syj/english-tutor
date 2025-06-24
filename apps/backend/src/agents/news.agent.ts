@@ -26,6 +26,9 @@ export class NewsAgent extends AbstractAgent {
   }
 
   async run(interests: string[]): Promise<NewsArticle> {
+    console.log(`--- NewsAgent Start ---`);
+    console.log(`[NewsAgent] Received interests: ${interests.join(', ')}`);
+
     const query = `Find a recent, interesting news article about one of the following topics: ${interests.join(
       ', ',
     )}. The article should be suitable for an intermediate English learner.`;
@@ -45,22 +48,30 @@ export class NewsAgent extends AbstractAgent {
 
     if (searchResults.length === 0) {
       // Return a default article or throw an error
-      return {
+      const article: NewsArticle = {
         title: 'No Article Found',
         source: 'N/A',
         url: '',
         fullText:
           "Sorry, I couldn't find a suitable news article about your interests. Let's try another topic.",
       };
+
+      console.log(`[NewsAgent] Returning article: "${article.title}"`);
+      console.log(`--- NewsAgent End ---`);
+      return article;
     }
 
     const firstResult = searchResults[0];
 
-    return {
+    const article: NewsArticle = {
       title: firstResult.title,
       source: firstResult.source || 'Unknown',
       url: firstResult.url,
       fullText: firstResult.content,
     };
+
+    console.log(`[NewsAgent] Returning article: "${article.title}"`);
+    console.log(`--- NewsAgent End ---`);
+    return article;
   }
 }
