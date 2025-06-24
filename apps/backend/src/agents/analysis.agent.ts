@@ -41,7 +41,7 @@ export class AnalysisAgent extends AbstractAgent {
     );
     this.llm = new ChatGoogleGenerativeAI({
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
-      model: 'gemini-pro',
+      model: 'gemini-2.0-flash',
       temperature: 0.7,
     });
     this.embeddings = new GoogleGenerativeAIEmbeddings({

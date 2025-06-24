@@ -14,8 +14,14 @@ export class NewsAgent extends AbstractAgent {
       'News Reporter',
       'Fetches the latest news articles based on user interests.',
     );
+    const tavilyApiKey = this.configService.get<string>('TAVILY_API_KEY');
+    if (!tavilyApiKey) {
+      throw new Error(
+        'TAVILY_API_KEY is not set in the environment variables.',
+      );
+    }
     this.searchTool = new TavilySearchResults({
-      apiKey: this.configService.get<string>('TAVILY_API_KEY'),
+      apiKey: tavilyApiKey,
     });
   }
 
@@ -24,7 +30,18 @@ export class NewsAgent extends AbstractAgent {
       ', ',
     )}. The article should be suitable for an intermediate English learner.`;
 
-    const searchResults = await this.searchTool.invoke(query);
+    const searchResultsString = await this.searchTool.invoke(query);
+
+    let searchResults = [];
+    try {
+      if (searchResultsString && searchResultsString.length > 0) {
+        searchResults = JSON.parse(searchResultsString);
+      }
+    } catch (error) {
+      console.error('Failed to parse Tavily search results:', error);
+      // Fallback to empty results if parsing fails
+      searchResults = [];
+    }
 
     if (searchResults.length === 0) {
       // Return a default article or throw an error
