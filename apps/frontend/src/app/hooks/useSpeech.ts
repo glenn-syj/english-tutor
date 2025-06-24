@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export interface UseSpeechRecognition {
   text: string;
@@ -20,14 +20,16 @@ const getSpeechRecognition = (): typeof window.SpeechRecognition | null => {
 export const useSpeechRecognition = (): UseSpeechRecognition => {
   const [text, setText] = useState("");
   const [isListening, setIsListening] = useState(false);
-  const recognition = getSpeechRecognition();
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const SpeechRecognition = getSpeechRecognition();
 
   const startListening = useCallback(() => {
-    if (!recognition) return;
-    const recognizer = new recognition();
+    if (!SpeechRecognition) return;
+    const recognizer = new SpeechRecognition();
+    recognitionRef.current = recognizer;
     recognizer.lang = "en-US";
     recognizer.interimResults = true;
-    recognizer.continuous = false;
+    recognizer.continuous = true;
 
     recognizer.onstart = () => {
       setIsListening(true);
@@ -42,49 +44,57 @@ export const useSpeechRecognition = (): UseSpeechRecognition => {
     };
 
     recognizer.onend = () => {
+      if (recognitionRef.current) {
+        recognitionRef.current = null;
+      }
       setIsListening(false);
     };
 
     recognizer.start();
-  }, [recognition]);
+  }, [SpeechRecognition]);
 
   const stopListening = useCallback(() => {
-    if (!recognition) return;
-    const recognizer = new recognition();
-    recognizer.stop();
-    setIsListening(false);
-  }, [recognition]);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  }, []);
 
   return {
     text,
     isListening,
     startListening,
     stopListening,
-    hasRecognitionSupport: !!recognition,
+    hasRecognitionSupport: !!SpeechRecognition,
   };
 };
 
 export const useTextToSpeech = () => {
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const speak = useCallback((text: string) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
-  }, []);
-
-  const cancel = useCallback(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+    if ("speechSynthesis" in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.onstart = () => setIsPlaying(true);
+      utterance.onend = () => setIsPlaying(false);
+      utterance.onerror = () => setIsPlaying(false);
+      window.speechSynthesis.speak(utterance);
     }
   }, []);
 
-  return { isSpeaking, speak, cancel };
+  const cancel = useCallback(() => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      setIsPlaying(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Cleanup on component unmount
+    return () => {
+      cancel();
+    };
+  }, [cancel]);
+
+  return { speak, cancel, isPlaying };
 };

@@ -9,14 +9,32 @@ import { useTextToSpeech } from "../hooks/useSpeech";
 export function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentlyPlayingId, setCurrentlyPlayingId] = useState<string | null>(
+    null
+  );
   const abortControllerRef = useRef<AbortController | null>(null);
-  const { speak } = useTextToSpeech();
+  const { speak, cancel, isPlaying } = useTextToSpeech();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setCurrentlyPlayingId(null);
+    }
+  }, [isPlaying]);
 
   useEffect(() => {
     // Scroll to the bottom when messages change
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const handlePlayAudio = (message: ChatMessage) => {
+    if (currentlyPlayingId === message.timestamp) {
+      cancel();
+    } else {
+      speak(message.text);
+      setCurrentlyPlayingId(message.timestamp);
+    }
+  };
 
   const handleSendMessage = async (content: string) => {
     const userMessage: ChatMessage = {
@@ -40,7 +58,7 @@ export function Chat() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          history: newMessages.slice(0, -1), // Send history without the new user message
+          history: newMessages.slice(0, -1), // Send history WITHOUT the new user message
           message: content,
         }),
         signal: abortControllerRef.current.signal,
@@ -61,13 +79,18 @@ export function Chat() {
       let aiResponseText = "";
       let currentAssistantMessage = "";
       const systemMessagePrefix = "SYSTEM_MESSAGE::";
+      const correctionMessagePrefix = "CORRECTION_MESSAGE::";
+      let assistantMessageTimestamp: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
         console.log("[Chat] Stream iteration:", { done, value });
 
         if (done) {
-          if (currentAssistantMessage) speak(currentAssistantMessage);
+          if (currentAssistantMessage.trim() && assistantMessageTimestamp) {
+            speak(currentAssistantMessage);
+            setCurrentlyPlayingId(assistantMessageTimestamp);
+          }
           break;
         }
 
@@ -118,6 +141,54 @@ export function Chat() {
           }
         }
 
+        // Check for our special correction message
+        if (remainingChunk.startsWith(correctionMessagePrefix)) {
+          const jsonStringStartIndex = correctionMessagePrefix.length;
+          let braceCount = 0;
+          let jsonStringEndIndex = -1;
+
+          // Find the end of the JSON object by counting braces
+          for (let i = jsonStringStartIndex; i < remainingChunk.length; i++) {
+            const char = remainingChunk[i];
+            if (char === "{") {
+              braceCount++;
+            } else if (char === "}") {
+              braceCount--;
+            }
+            if (braceCount === 0 && i >= jsonStringStartIndex) {
+              jsonStringEndIndex = i + 1;
+              break;
+            }
+          }
+
+          if (jsonStringEndIndex !== -1) {
+            const correctionJson = remainingChunk.substring(
+              jsonStringStartIndex,
+              jsonStringEndIndex
+            );
+            console.log("[Chat] Correction message found:", correctionJson);
+            try {
+              const correction = JSON.parse(correctionJson);
+              setMessages((prev) => {
+                const lastMessage = prev[prev.length - 1];
+                if (lastMessage?.sender === "user") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...lastMessage, correction: correction },
+                  ];
+                }
+                return prev;
+              });
+            } catch (e) {
+              console.error("Failed to parse correction message", e);
+            }
+            // The rest of the chunk might be the start of the AI's response
+            remainingChunk = remainingChunk
+              .substring(jsonStringEndIndex)
+              .trimStart();
+          }
+        }
+
         if (remainingChunk) {
           aiResponseText += remainingChunk;
           currentAssistantMessage += remainingChunk;
@@ -136,12 +207,15 @@ export function Chat() {
               ];
             } else {
               // Otherwise, add a new assistant message.
+              if (!assistantMessageTimestamp) {
+                assistantMessageTimestamp = new Date().toISOString();
+              }
               return [
                 ...prev,
                 {
                   sender: "assistant",
                   text: remainingChunk,
-                  timestamp: new Date().toISOString(),
+                  timestamp: assistantMessageTimestamp,
                 },
               ];
             }
@@ -187,7 +261,8 @@ export function Chat() {
                 <ChatMessageComponent
                   key={index}
                   message={message}
-                  onPlayAudio={speak}
+                  onPlayAudio={() => handlePlayAudio(message)}
+                  isPlaying={currentlyPlayingId === message.timestamp}
                 />
               ))}
             <div ref={messagesEndRef} />

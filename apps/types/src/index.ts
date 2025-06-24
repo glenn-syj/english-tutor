@@ -2,6 +2,7 @@ export interface ChatMessage {
   sender: "user" | "assistant" | "system";
   timestamp: string;
   text: string;
+  correction?: Correction;
   isError?: boolean;
 }
 
@@ -20,7 +21,7 @@ export interface CorrectionNoErrors {
 export type Correction = CorrectionWithErrors | CorrectionNoErrors;
 
 export interface UserProfile {
-  userName: string;
+  name: string;
   interests: string[];
   learningLevel: string;
   recentCorrections: CorrectionWithErrors[];

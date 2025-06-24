@@ -1,48 +1,63 @@
-import { type ChatMessage } from "@/types";
+import { type ChatMessage, type Correction } from "@/types";
+import { SpeakerLoudIcon, SpeakerOffIcon } from "@radix-ui/react-icons";
 
 interface Props {
   message: ChatMessage;
-  onPlayAudio?: (text: string) => void;
+  onPlayAudio: () => void;
+  isPlaying: boolean;
 }
 
-export function ChatMessage({ message, onPlayAudio }: Props) {
-  const isAI = message.sender === "assistant";
+export function ChatMessage({ message, onPlayAudio, isPlaying }: Props) {
+  const isAssistant = message.sender === "assistant";
 
   return (
     <div
-      className={`flex w-full ${
-        isAI && !message.isError ? "bg-gray-50" : "bg-white"
-      } ${message.isError ? "border-red-500" : "border-gray-100"} p-4 border-b`}
+      className={`flex items-start gap-3 p-4 ${
+        isAssistant ? "bg-gray-50" : ""
+      }`}
     >
-      <div className="flex-1 max-w-4xl mx-auto">
-        <div className="flex items-start">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center ${
-              isAI ? "bg-blue-500" : "bg-gray-500"
-            } ${message.isError ? "bg-red-500" : ""}`}
+      <div
+        className={`flex h-8 w-8 items-center justify-center rounded-full ${
+          isAssistant ? "bg-blue-500 text-white" : "bg-gray-300"
+        }`}
+      >
+        {isAssistant ? "AI" : "You"}
+      </div>
+      <div className="flex-1 space-y-2">
+        <p className="text-gray-800">{message.text}</p>
+
+        {message.correction && message.correction.has_errors && (
+          <div className="mt-2 rounded-md border border-yellow-300 bg-yellow-50 p-3">
+            <h4 className="text-sm font-semibold text-yellow-800">
+              Correction Suggestion
+            </h4>
+            <p className="text-sm text-yellow-700">
+              <span className="font-medium">Original:</span>{" "}
+              {message.correction.original}
+            </p>
+            <p className="text-sm text-green-700">
+              <span className="font-medium">Corrected:</span>{" "}
+              {message.correction.corrected}
+            </p>
+            <p className="mt-1 text-xs text-yellow-600">
+              {message.correction.explanation}
+            </p>
+          </div>
+        )}
+
+        {isAssistant && (
+          <button
+            onClick={onPlayAudio}
+            className="text-gray-500 hover:text-gray-700"
+            aria-label={isPlaying ? "Stop audio" : "Play audio"}
           >
-            <span className="text-white text-sm">
-              {isAI ? (message.isError ? "!" : "AI") : "You"}
-            </span>
-          </div>
-          <div className="ml-4 flex-1">
-            <div
-              className={`text-sm ${
-                message.isError ? "text-red-700" : "text-gray-900"
-              } whitespace-pre-wrap`}
-            >
-              {message.text}
-            </div>
-          </div>
-          {isAI && onPlayAudio && !message.isError && (
-            <button
-              onClick={() => onPlayAudio(message.text)}
-              className="ml-4 p-1 text-gray-500 hover:text-gray-800"
-            >
-              🔊
-            </button>
-          )}
-        </div>
+            {isPlaying ? (
+              <SpeakerOffIcon className="h-5 w-5" />
+            ) : (
+              <SpeakerLoudIcon className="h-5 w-5" />
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
