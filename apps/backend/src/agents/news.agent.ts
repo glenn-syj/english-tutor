@@ -1,29 +1,40 @@
 import { Injectable } from '@nestjs/common';
-import { Agent } from './agent.abstract';
+import { ConfigService } from '@nestjs/config';
+import { AbstractAgent } from './agent.abstract';
 import { NewsArticle } from '../../../types/src';
 
-const MOCK_NEWS_ARTICLE: NewsArticle = {
-  title: 'Tech Giants Unveil New AI Ethics Guidelines',
-  source: 'FutureTech Magazine',
-  url: 'https://example.com/news/ai-ethics-guidelines',
-  fullText: `
-    Several of the world's largest technology companies, in a landmark move, have collaboratively released a new set of ethical guidelines for the development of Artificial Intelligence.
-    The initiative aims to address growing concerns about the potential for AI to perpetuate biases, compromise user privacy, and operate without sufficient transparency.
-    The guidelines call for increased accountability in AI systems, regular third-party audits, and a commitment to designing AI that serves and empowers humanity.
-    Industry experts have cautiously welcomed the move, emphasizing that the true test will be in the implementation and enforcement of these principles.
-    The document outlines five core pillars: Fairness, Transparency, Accountability, Privacy, and Security.
-    For each pillar, the guidelines provide specific recommendations, such as using diverse datasets to train AI models and providing clear explanations for AI-driven decisions.
-    The companies have pledged to establish an independent oversight body to monitor compliance and publish annual reports on their progress.
-    This collaborative effort is seen as a significant step toward building a more trustworthy and responsible AI ecosystem.
-    `.trim(),
-};
+// This is a mock implementation.
+// In a real application, this would fetch news from a live API.
+const mockNewsDatabase: NewsArticle[] = [
+  {
+    title: 'Global Tech Summit 2024 Concludes with Major Announcements',
+    source: 'Tech Chronicle',
+    url: 'https://example.com/news1',
+    fullText:
+      'The Global Tech Summit 2024 wrapped up today in Silicon Valley, leaving the tech world buzzing. Keynotes from industry giants unveiled groundbreaking advancements in AI, quantum computing, and sustainable tech. The summit emphasized a collaborative future, with many companies announcing open-source projects. A major highlight was the unveiling of a new AI model that can write code with near-human accuracy, sparking both excitement and debate about the future of software development.',
+  },
+  {
+    title: 'The Rise of Urban Farming: A Green Revolution in Our Cities',
+    source: 'Eco Watch',
+    url: 'https://example.com/news2',
+    fullText:
+      'Urban farming is transforming cityscapes and our relationship with food. From rooftop gardens to vertical farms in skyscrapers, cities are becoming hubs of agricultural innovation. This movement not only provides fresh, local produce but also reduces carbon footprints and strengthens community ties. Experts believe this is a critical step towards building resilient and sustainable urban environments for the future.',
+  },
+];
 
 @Injectable()
-export class NewsAgent extends Agent<string, NewsArticle> {
-  async execute(topic: string): Promise<NewsArticle> {
-    console.log(`Fetching news for topic: ${topic}`);
-    // In a real implementation, this would call an external News API.
-    // For now, we return a mock article.
-    return MOCK_NEWS_ARTICLE;
+export class NewsAgent extends AbstractAgent {
+  constructor(configService: ConfigService) {
+    super(
+      configService,
+      'News Feeder Agent',
+      'This agent provides relevant news articles for the user to discuss.',
+    );
+  }
+
+  async run(): Promise<NewsArticle> {
+    // For now, it returns a random article from the mock database.
+    const randomIndex = Math.floor(Math.random() * mockNewsDatabase.length);
+    return mockNewsDatabase[randomIndex];
   }
 }
