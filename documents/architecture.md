@@ -7,38 +7,40 @@
 ### 1.1. 전체 시스템 구조도
 
 ```mermaid
-graph TB
-    subgraph "프론트엔드 (Next.js)"
+graph TD
+    subgraph "Frontend (Next.js)"
         UI[UI Components]
-        STT[Speech-to-Text]
-        TTS[Text-to-Speech]
-        State[상태 관리]
+        State[State Management]
+        Speech[Web Speech API<br/>(STT/TTS)]
     end
 
-    subgraph "백엔드 (Nest.js)"
-        API[REST API]
-        subgraph "AI 에이전트 네트워크"
-            Orchestrator[오케스트레이터]
-            News[뉴스 에이전트]
-            Analysis[분석 에이전트]
-            Correction[교정 에이전트]
-            Memory[기억 에이전트]
-            Conversation[대화 에이전트]
+    subgraph "Backend (Nest.js)"
+        Controller[API Controllers]
+        subgraph "AI Agent Network"
+            Orchestrator[OrchestratorService]
+            News[NewsAgent]
+            Analysis[AnalysisAgent]
+            Correction[CorrectionAgent]
+            Conversation[ConversationAgent]
         end
-        DB[(로컬 스토리지)]
+        ProfileService[ProfileService]
+        Storage[(user_profile.json)]
     end
 
-    UI --> API
-    API --> Orchestrator
-    Orchestrator --> News & Analysis & Correction & Memory & Conversation
-    Memory --> DB
+    UI --> Controller
+    Controller -- /chat --> Orchestrator
+    Controller -- /profile --> ProfileService
+    Orchestrator --> News & Analysis & Correction & Conversation
+    Orchestrator --> ProfileService
+    ProfileService --> Storage
+
 ```
 
 ### 1.2. 모노레포 구조
 
 ```mermaid
 graph LR
-    subgraph "Monorepo"
+    subgraph "pnpm Monorepo"
         subgraph "apps"
             FE[frontend]
             BE[backend]
@@ -54,46 +56,61 @@ graph LR
 ### 2.1. 프론트엔드 (Next.js)
 
 - **UI Components**: React 기반의 사용자 인터페이스
-  - 대화 히스토리 표시
-  - 음성 입력/출력 상태 표시
-  - 실시간 피드백 UI
-- **Speech Handling**:
-  - Web Speech API를 활용한 STT/TTS 처리
-  - 음성 스트림 관리
+  - 대화 히스토리 표시 (`ChatMessage.tsx`)
+  - 메시지 입력 및 전송 (`ChatInput.tsx`)
+- **Speech Handling (`useSpeech.ts` Hook)**:
+  - Web Speech API를 활용한 음성-텍스트 변환(STT) 및 텍스트-음성 변환(TTS) 처리
+- **API Communication**:
+  - 백엔드 `/chat` API와 통신하여 응답 스트림을 실시간으로 렌더링
 
 ### 2.2. 백엔드 (Nest.js)
 
 ```mermaid
-graph TB
-    subgraph "Nest.js 모듈 구조"
-        AppModule --> ChatModule & AgentModule & StorageModule
-        ChatModule --> ChatController & ChatService
-        AgentModule --> AgentService & OrchestratorService
-        StorageModule --> StorageService
+graph TD
+    subgraph "Nest.js Module Structure"
+        AppModule
+        AppModule --> ChatModule
+        AppModule --> ProfileModule
+
+        ChatModule -- imports --> AgentsModule
+        ProfileModule -- uses --> StorageModule
+
+        subgraph "Modules & Services"
+            ChatModule --> OrchestratorService & ChatController
+            AgentsModule --> NewsAgent & AnalysisAgent & CorrectionAgent & ConversationAgent
+            ProfileModule --> ProfileService & ProfileController
+            StorageModule --> StorageService
+        end
     end
 ```
 
 - **모듈 구성**:
-  - `ChatModule`: 대화 처리 및 스트리밍
-  - `AgentModule`: AI 에이전트 네트워크 관리
-  - `StorageModule`: 로컬 저장소 관리
+  - `AppModule`: 애플리케이션의 루트 모듈.
+  - `ChatModule`: `/chat` 엔드포인트를 통해 대화 흐름을 관리. `OrchestratorService`를 포함.
+  - `AgentsModule`: 각 AI 에이전트(`NewsAgent`, `ConversationAgent` 등)를 프로바이더로 제공.
+  - `ProfileModule`: `/profile` 엔드포인트를 통해 사용자 프로필을 관리.
+  - `StorageModule`: `user_profile.json` 파일에 대한 읽기/쓰기 로직을 담당하는 `StorageService` 제공.
 
 ### 2.3. 공유 타입 시스템
 
 ```typescript
-// apps/types/src/index.ts 예시
+// apps/types/src/index.ts
+
 export interface ChatMessage {
-  sender: "user" | "ai";
-  text: string;
+  sender: "user" | "assistant" | "system";
   timestamp: string;
+  text: string;
+  correction?: Correction;
 }
 
 export interface UserProfile {
-  userName: string;
+  name: string;
   interests: string[];
-  learningLevel: "Beginner" | "Intermediate" | "Advanced";
-  recentCorrections: CorrectionHistory[];
+  learningLevel: string;
+  recentCorrections: CorrectionWithErrors[];
 }
+
+// ... and other shared types like Correction, NewsAnalysis, etc.
 ```
 
 ## 3. 데이터 흐름
@@ -102,20 +119,23 @@ export interface UserProfile {
 sequenceDiagram
     participant U as User
     participant F as Frontend
-    participant B as Backend
-    participant A as AI Agents
-    participant S as Storage
+    participant B as Backend (Controller)
+    participant O as OrchestratorService
+    participant A as Agents (News, etc.)
+    participant P as ProfileService
 
     U->>F: 음성 입력
-    F->>F: STT 변환
-    F->>B: POST /chat
-    B->>A: 오케스트레이터 실행
-    A->>S: 사용자 프로필 조회
-    S-->>A: 프로필 데이터
-    A->>A: 에이전트 협업
-    A-->>B: 응답 생성
-    B-->>F: 스트리밍 응답
-    F->>F: TTS 변환
+    F->>F: STT: "Tell me a news"
+    F->>B: POST /chat (message)
+    B->>O: process(history, message)
+    O->>P: getProfile()
+    P-->>O: userProfile
+    O->>A: run()
+    A-->>O: agent_result
+    O->>A: conversationAgent.run()
+    A-->>B: responseStream
+    B-->>F: Stream chunks...
+    F->>F: Render text & TTS
     F-->>U: 음성 출력
 ```
 
@@ -123,25 +143,13 @@ sequenceDiagram
 
 ### 4.1. 데이터베이스 확장
 
-```mermaid
-graph LR
-    subgraph "현재"
-        LS[(로컬 스토리지)]
-    end
-    subgraph "확장 가능성"
-        RDB[(관계형 DB)]
-        Vector[(벡터 DB)]
-    end
-    LS -.-> RDB & Vector
-```
-
-- **초기 단계**: 로컬 JSON 파일 사용
+- **초기 단계**: 로컬 `user_profile.json` 파일 사용 (`StorageService`).
 - **확장 단계**:
-  - 사용자 데이터: PostgreSQL/MySQL
-  - 벡터 저장소: ChromaDB/LanceDB
+  - **사용자 데이터**: `StorageService`의 내부 구현을 PostgreSQL/MySQL 같은 관계형 데이터베이스로 교체.
+  - **기억 저장소**: 대화 기록이나 문서 임베딩을 저장하기 위해 별도의 벡터 데이터베이스(e.g., ChromaDB, LanceDB) 도입 고려.
 
 ### 4.2. 보안 고려사항
 
-- 환경 변수 관리
-- API 키 보안
-- 사용자 데이터 암호화
+- **환경 변수**: API 키(Gemini, Tavily)는 `.env` 파일로 관리하고 `ConfigModule`을 통해 주입.
+- **API 보안**: 현재는 별도 인증 없으나, 향후 JWT 등을 이용한 사용자 인증 체계 도입 가능.
+- **데이터 처리**: 민감한 사용자 데이터는 전송 및 저장 시 암호화 고려.
