@@ -6,9 +6,27 @@ import {
   NewsAgent,
 } from '../agents';
 import { ProfileService } from '../profile/profile.service';
-import { ChatMessage } from '../../../types/src';
+import { ChatMessage, NewsAnalysis } from '../../../types/src';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { Runnable } from '@langchain/core/runnables';
+import { Readable } from 'stream';
+import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
+
+const ARTICLE_SYSTEM_MESSAGE_PREFIX = 'SYSTEM_ARTICLE:';
+const ARTICLE_STREAM_PREFIX = 'SYSTEM_MESSAGE::';
+
+const convertToLangChainMessages = (messages: ChatMessage[]): BaseMessage[] => {
+  return messages
+    .filter((message) => message.sender !== 'system') // Filter out internal system messages
+    .map((message) => {
+      if (message.sender === 'user') {
+        return new HumanMessage(message.text);
+      } else {
+        // Assumes 'assistant'
+        return new AIMessage(message.text);
+      }
+    });
+};
 
 @Injectable()
 export class OrchestratorService {
@@ -20,32 +38,75 @@ export class OrchestratorService {
     private readonly profileService: ProfileService,
   ) {}
 
-  async process(
+  process(history: ChatMessage[], message: string): Readable {
+    const stream = this.streamProcessor(history, message);
+    return Readable.from(stream);
+  }
+
+  private async *streamProcessor(
     history: ChatMessage[],
     message: string,
-  ): Promise<ReadableStream<string>> {
+  ): AsyncGenerator<string, void, unknown> {
+    console.log('--- Orchestrator Start ---');
+    console.log(`[Orchestrator] Received message: "${message}"`);
+    console.log(`[Orchestrator] Received history length: ${history.length}`);
+
     const userProfile = await this.profileService.getProfile();
 
-    // Add the new message to the history for the agents
-    const fullHistory: ChatMessage[] = [
-      ...history,
-      { sender: 'user', text: message, timestamp: new Date().toISOString() },
-    ];
+    let newsAnalysis: NewsAnalysis;
+    let newArticleSystemMessage: ChatMessage | null = null;
 
-    const correction = await this.correctionAgent.run(fullHistory);
+    const articleSystemMessage = history.find((msg) =>
+      msg.text.startsWith(ARTICLE_SYSTEM_MESSAGE_PREFIX),
+    );
 
-    // For now, we fetch the same news every time.
-    // A more advanced implementation might select news based on profile interests.
-    const newsArticle = await this.newsAgent.run(userProfile.interests);
-    const newsAnalysis = await this.analysisAgent.run(newsArticle);
+    let fullHistory: ChatMessage[] = [...history];
+    const newChatMessage: ChatMessage = {
+      sender: 'user',
+      text: message,
+      timestamp: new Date().toISOString(),
+    };
 
-    // The final agent receives all the context.
+    if (articleSystemMessage) {
+      console.log('[Orchestrator] Existing article found in history.');
+      const articleJson = articleSystemMessage.text.substring(
+        ARTICLE_SYSTEM_MESSAGE_PREFIX.length,
+      );
+      newsAnalysis = JSON.parse(articleJson);
+      fullHistory.push(newChatMessage);
+    } else {
+      console.log('[Orchestrator] No article in history. Fetching new one.');
+      const newsArticle = await this.newsAgent.run(userProfile.interests);
+      newsAnalysis = await this.analysisAgent.run(newsArticle);
+
+      newArticleSystemMessage = {
+        sender: 'system',
+        text: `${ARTICLE_SYSTEM_MESSAGE_PREFIX}${JSON.stringify(newsAnalysis)}`,
+        timestamp: new Date().toISOString(),
+      };
+      fullHistory.push(newArticleSystemMessage, newChatMessage);
+    }
+
+    if (newArticleSystemMessage) {
+      const systemMessagePayload = `${ARTICLE_STREAM_PREFIX}${JSON.stringify(
+        newArticleSystemMessage,
+      )}\n`;
+      console.log(
+        '[Orchestrator] Prepending new article system message to stream.',
+      );
+      yield systemMessagePayload;
+    }
+
+    const correction = await this.correctionAgent.run(message);
+    const langChainHistory = convertToLangChainMessages(fullHistory);
+
+    console.log('[Orchestrator] Invoking ConversationAgent...');
     const chain = (await this.conversationAgent.run(
       {
         userProfile,
         newsAnalysis,
         correction,
-        chatHistory: fullHistory,
+        chatHistory: langChainHistory,
       },
       {
         stream: true,
@@ -53,10 +114,16 @@ export class OrchestratorService {
     )) as Runnable<any, any>;
 
     const stream = await chain.pipe(new StringOutputParser()).stream({
-      chat_history: fullHistory,
+      user_profile: JSON.stringify(userProfile),
+      news_analysis: JSON.stringify(newsAnalysis),
+      correction: JSON.stringify(correction),
+      chat_history: langChainHistory,
       user_message: message,
     });
 
-    return stream;
+    for await (const chunk of stream) {
+      yield chunk;
+    }
+    console.log('--- Orchestrator End ---');
   }
 }
