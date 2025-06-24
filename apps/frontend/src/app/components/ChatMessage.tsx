@@ -2,10 +2,11 @@ import { type ChatMessage } from "@/types";
 
 interface Props {
   message: ChatMessage;
+  onPlayAudio?: (text: string) => void;
 }
 
-export function ChatMessage({ message }: Props) {
-  const isAI = message.role === "assistant";
+export function ChatMessage({ message, onPlayAudio }: Props) {
+  const isAI = message.sender === "ai";
 
   return (
     <div
@@ -24,9 +25,17 @@ export function ChatMessage({ message }: Props) {
           </div>
           <div className="ml-4 flex-1">
             <div className="text-sm text-gray-900 whitespace-pre-wrap">
-              {message.content}
+              {message.text}
             </div>
           </div>
+          {isAI && onPlayAudio && (
+            <button
+              onClick={() => onPlayAudio(message.text)}
+              className="ml-4 p-1 text-gray-500 hover:text-gray-800"
+            >
+              🔊
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -2,19 +2,28 @@ import { useState, useEffect, useRef } from "react";
 import { type ChatMessage } from "@/types";
 import { ChatMessage as ChatMessageComponent } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
+import { useTextToSpeech } from "../hooks/useSpeech";
 
 export function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const { speak } = useTextToSpeech();
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Scroll to the bottom when messages change
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSendMessage = async (content: string) => {
     const userMessage: ChatMessage = {
       sender: "user",
-      timestamp: new Date().toISOString(),
       text: content,
+      timestamp: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setIsLoading(true);
 
     if (abortControllerRef.current) {
@@ -29,7 +38,7 @@ export function Chat() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          history: messages,
+          history: newMessages.slice(0, -1), // Send history without the new user message
           message: content,
         }),
         signal: abortControllerRef.current.signal,
@@ -39,22 +48,26 @@ export function Chat() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let aiResponseText = "";
       let initialChunkReceived = false;
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          speak(aiResponseText);
+          break;
+        }
 
         const chunk = decoder.decode(value, { stream: true });
 
-        // SSE data is prefixed with "data: "
         const jsonStrings = chunk.match(/data: (.*)/g);
         if (!jsonStrings) continue;
 
         for (const jsonString of jsonStrings) {
           try {
-            const data = JSON.parse(jsonString.substring(5)); // Remove "data: "
+            const data = JSON.parse(jsonString.substring(5));
             if (data.type === "token" && data.content) {
+              aiResponseText += data.content;
               if (!initialChunkReceived) {
                 initialChunkReceived = true;
                 setMessages((prev) => [
@@ -71,10 +84,7 @@ export function Chat() {
                   if (lastMessage.sender === "ai") {
                     return [
                       ...prev.slice(0, -1),
-                      {
-                        ...lastMessage,
-                        text: lastMessage.text + data.content,
-                      },
+                      { ...lastMessage, text: lastMessage.text + data.content },
                     ];
                   }
                   return prev;
@@ -82,7 +92,7 @@ export function Chat() {
               }
             }
           } catch (e) {
-            // Might receive incomplete JSON string, just ignore it and wait for the next chunk
+            // Ignore parsing errors
           }
         }
       }
@@ -112,9 +122,16 @@ export function Chat() {
             Start a conversation by typing a message below
           </div>
         ) : (
-          messages.map((message, index) => (
-            <ChatMessageComponent key={index} message={message} />
-          ))
+          <div>
+            {messages.map((message, index) => (
+              <ChatMessageComponent
+                key={index}
+                message={message}
+                onPlayAudio={speak}
+              />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
         )}
       </div>
       <div className="border-t border-gray-200">
