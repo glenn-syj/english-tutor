@@ -1,57 +1,78 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AbstractAgent } from './agent.abstract';
-import { ChatMessage } from '../../../types/src';
+import { ChatMessage, Correction } from '../../../types/src';
 import { z } from 'zod';
 import { StructuredOutputParser } from 'langchain/output_parsers';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { PromptTemplate } from '@langchain/core/prompts';
 
 const correctionSchema = z.object({
-  hasError: z
+  has_errors: z
     .boolean()
-    .describe('Whether the user`s last message has any grammatical errors.'),
-  correctedText: z
+    .describe('Set to true if there are errors, false otherwise.'),
+  original: z.string().describe('The original user message.'),
+  corrected: z
     .string()
-    .nullable()
     .describe(
-      'The corrected version of the user`s message. Null if no errors.',
+      'The corrected version of the message. If no errors, this should be the same as the original text.',
     ),
   explanation: z
     .string()
-    .nullable()
-    .describe('A brief explanation of the correction. Null if no errors.'),
+    .describe(
+      'A brief explanation of the corrections. If there are no errors, provide a short, encouraging feedback message here.',
+    ),
 });
 
 @Injectable()
 export class CorrectionAgent extends AbstractAgent {
+  private parser;
+
   constructor(configService: ConfigService) {
     super(
       configService,
-      'English Correction Agent',
-      'You are an expert in English grammar and syntax. Your role is to identify and correct any grammatical errors in the user`s most recent message.',
+      'Correction Agent',
+      "Corrects the user's English sentences and provides feedback.",
     );
+    this.parser = StructuredOutputParser.fromZodSchema(correctionSchema);
   }
 
-  async run(history: ChatMessage[]): Promise<any> {
+  async run(history: ChatMessage[]): Promise<Correction> {
     const lastUserMessage = history
       .filter((msg) => msg.sender === 'user')
       .pop();
     if (!lastUserMessage) {
-      return { hasError: false, correctedText: null, explanation: null };
+      return {
+        has_errors: false,
+        feedback: 'No user message found to correct.',
+      };
     }
 
-    const parser = StructuredOutputParser.fromZodSchema(correctionSchema);
-
-    const prompt = ChatPromptTemplate.fromTemplate(
-      `Please analyze the last user message for grammatical errors. Your output must be a single, valid JSON object with the following structure: {format_instructions}\n\n[User Message]\n{user_message}`,
+    const prompt = PromptTemplate.fromTemplate(
+      `You are an English teacher. Analyze the user's message for errors.
+User's message: "{user_message}"
+Based on your analysis, provide a corrected version and an explanation.
+If there are no errors, provide positive feedback in the explanation field.
+Your output must be a JSON object that strictly follows these instructions, do not add any text before or after the JSON object: {format_instructions}`,
     );
 
-    const chain = prompt.pipe(this.llm).pipe(parser);
-    const result = await chain.invoke({
-      format_instructions: parser.getFormatInstructions(),
+    const chain = prompt.pipe(this.llm).pipe(this.parser);
+    const result = (await chain.invoke({
       user_message: lastUserMessage.text,
-    });
+      format_instructions: this.parser.getFormatInstructions(),
+    })) as z.infer<typeof correctionSchema>;
 
-    return result;
+    if (result.has_errors) {
+      return {
+        has_errors: true,
+        original: result.original,
+        corrected: result.corrected,
+        explanation: result.explanation,
+      };
+    } else {
+      return {
+        has_errors: false,
+        feedback: result.explanation,
+      };
+    }
   }
 }
