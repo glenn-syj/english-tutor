@@ -1,60 +1,57 @@
 import { Injectable } from '@nestjs/common';
-import {
-  ChatGoogleGenerativeAI,
-  GoogleGenerativeAIEmbeddings,
-} from '@langchain/google-genai';
-import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
+import { ConfigService } from '@nestjs/config';
+import { AbstractAgent } from './agent.abstract';
+import { ChatMessage } from '../../../types/src';
 import { z } from 'zod';
 import { StructuredOutputParser } from 'langchain/output_parsers';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
 
-import { Agent } from './agent.abstract';
-import { Correction, CorrectionNoErrors } from '../../../types/src';
-
-const PROMPT_TEMPLATE = `You are a meticulous English grammar and style checker. Your task is to analyze the user's sentence for any grammatical errors, awkward phrasing, or opportunities for improvement.
-- If the sentence is perfect, return a JSON object like this: {{"has_errors": false, "feedback": "Great job, that sentence is perfect!"}}.
-- If there are errors, return a JSON object with this exact structure: {{"has_errors": true, "original": "...", "corrected": "...", "explanation": "..."}}.
-Do not add any text before or after the JSON object.
-
-User's sentence:
-{user_sentence}`;
-
-const schemaWithErrors = z.object({
-  has_errors: z.literal(true),
-  original: z.string().describe("The user's original sentence."),
-  corrected: z.string().describe('The corrected version of the sentence.'),
-  explanation: z.string().describe('A brief explanation of the correction.'),
-});
-
-const schemaNoErrors = z.object({
-  has_errors: z.literal(false),
-  feedback: z
+const correctionSchema = z.object({
+  hasError: z
+    .boolean()
+    .describe('Whether the user`s last message has any grammatical errors.'),
+  correctedText: z
     .string()
-    .describe('A brief feedback message for the perfect sentence.'),
+    .nullable()
+    .describe(
+      'The corrected version of the user`s message. Null if no errors.',
+    ),
+  explanation: z
+    .string()
+    .nullable()
+    .describe('A brief explanation of the correction. Null if no errors.'),
 });
-
-const parser = StructuredOutputParser.fromZodSchema(
-  z.union([schemaWithErrors, schemaNoErrors]),
-);
 
 @Injectable()
-export class CorrectionAgent extends Agent<string, Correction> {
-  private readonly llm: ChatGoogleGenerativeAI;
-  private readonly prompt: PromptTemplate;
-
-  constructor() {
-    super();
-    this.llm = new ChatGoogleGenerativeAI({
-      model: 'gemini-1.5-flash',
-      temperature: 0,
-    });
-    this.prompt = ChatPromptTemplate.fromTemplate(PROMPT_TEMPLATE);
+export class CorrectionAgent extends AbstractAgent {
+  constructor(configService: ConfigService) {
+    super(
+      configService,
+      'English Correction Agent',
+      'You are an expert in English grammar and syntax. Your role is to identify and correct any grammatical errors in the user`s most recent message.',
+    );
   }
 
-  async execute(user_sentence: string): Promise<Correction> {
-    const chain = this.prompt.pipe(this.llm).pipe(parser);
+  async run(history: ChatMessage[]): Promise<any> {
+    const lastUserMessage = history
+      .filter((msg) => msg.sender === 'user')
+      .pop();
+    if (!lastUserMessage) {
+      return { hasError: false, correctedText: null, explanation: null };
+    }
+
+    const parser = StructuredOutputParser.fromZodSchema(correctionSchema);
+
+    const prompt = ChatPromptTemplate.fromTemplate(
+      `Please analyze the last user message for grammatical errors. Your output must be a single, valid JSON object with the following structure: {format_instructions}\n\n[User Message]\n{user_message}`,
+    );
+
+    const chain = prompt.pipe(this.llm).pipe(parser);
     const result = await chain.invoke({
-      user_sentence,
+      format_instructions: parser.getFormatInstructions(),
+      user_message: lastUserMessage.text,
     });
+
     return result;
   }
 }
