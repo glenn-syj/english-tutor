@@ -7,9 +7,17 @@ export class ProfileService {
   constructor(private readonly storageService: StorageService) {}
 
   async getProfile(): Promise<UserProfile> {
-    const userProfile = await this.storageService.readUserProfile();
+    let userProfile = await this.storageService.readUserProfile();
     if (!userProfile) {
-      throw new NotFoundException('User profile not found.');
+      // If no profile exists, create a default one
+      const defaultProfile: UserProfile = {
+        userName: 'New User',
+        interests: ['technology', 'news', 'language learning'],
+        learningLevel: 'intermediate',
+        recentCorrections: [],
+      };
+      await this.storageService.writeUserProfile(defaultProfile);
+      userProfile = defaultProfile;
     }
     return userProfile;
   }
