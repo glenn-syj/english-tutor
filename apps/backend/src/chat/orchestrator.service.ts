@@ -76,8 +76,10 @@ export class OrchestratorService {
       newsAnalysis = JSON.parse(articleJson);
       fullHistory.push(newChatMessage);
     } else {
-      console.log('[Orchestrator] No article in history. Fetching new one.');
-      const newsArticle = await this.newsAgent.run(userProfile.interests);
+      console.log(
+        '[Orchestrator] No article in history. Fetching new one based on the user message.',
+      );
+      const newsArticle = await this.newsAgent.run([message]);
       newsAnalysis = await this.analysisAgent.run(newsArticle);
 
       newArticleSystemMessage = {
@@ -110,18 +112,13 @@ export class OrchestratorService {
     const langChainHistory = convertToLangChainMessages(fullHistory);
 
     console.log('[Orchestrator] Invoking ConversationAgent...');
-    const chain = (await this.conversationAgent.run(
-      {
-        userProfile,
-        newsAnalysis,
-        correction,
-      },
-      {
-        stream: true,
-      },
-    )) as Runnable<any, any>;
+    const chain = (await this.conversationAgent.run()) as Runnable<any, any>;
 
     const stream = await chain.pipe(new StringOutputParser()).stream({
+      user_name: userProfile.name,
+      user_profile: JSON.stringify(userProfile),
+      news_analysis: JSON.stringify(newsAnalysis),
+      correction: JSON.stringify(correction),
       chat_history: langChainHistory,
       user_message: message,
     });
