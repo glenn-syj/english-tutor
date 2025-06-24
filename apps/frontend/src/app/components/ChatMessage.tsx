@@ -6,7 +6,7 @@ interface Props {
 }
 
 export function ChatMessage({ message, onPlayAudio }: Props) {
-  const isAI = message.sender === "ai";
+  const isAI = message.sender === "assistant";
 
   return (
     <div

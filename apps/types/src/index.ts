@@ -1,5 +1,5 @@
 export interface ChatMessage {
-  sender: "user" | "ai";
+  sender: "user" | "assistant" | "system";
   timestamp: string;
   text: string;
   isError?: boolean;
