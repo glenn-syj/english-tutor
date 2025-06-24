@@ -2,6 +2,7 @@ export interface ChatMessage {
   sender: "user" | "ai";
   timestamp: string;
   text: string;
+  isError?: boolean;
 }
 
 export interface CorrectionWithErrors {

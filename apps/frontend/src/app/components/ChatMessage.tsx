@@ -11,24 +11,30 @@ export function ChatMessage({ message, onPlayAudio }: Props) {
   return (
     <div
       className={`flex w-full ${
-        isAI ? "bg-gray-50" : "bg-white"
-      } p-4 border-b border-gray-100`}
+        isAI && !message.isError ? "bg-gray-50" : "bg-white"
+      } ${message.isError ? "border-red-500" : "border-gray-100"} p-4 border-b`}
     >
       <div className="flex-1 max-w-4xl mx-auto">
         <div className="flex items-start">
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center ${
               isAI ? "bg-blue-500" : "bg-gray-500"
-            }`}
+            } ${message.isError ? "bg-red-500" : ""}`}
           >
-            <span className="text-white text-sm">{isAI ? "AI" : "You"}</span>
+            <span className="text-white text-sm">
+              {isAI ? (message.isError ? "!" : "AI") : "You"}
+            </span>
           </div>
           <div className="ml-4 flex-1">
-            <div className="text-sm text-gray-900 whitespace-pre-wrap">
+            <div
+              className={`text-sm ${
+                message.isError ? "text-red-700" : "text-gray-900"
+              } whitespace-pre-wrap`}
+            >
               {message.text}
             </div>
           </div>
-          {isAI && onPlayAudio && (
+          {isAI && onPlayAudio && !message.isError && (
             <button
               onClick={() => onPlayAudio(message.text)}
               className="ml-4 p-1 text-gray-500 hover:text-gray-800"

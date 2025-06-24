@@ -44,6 +44,13 @@ export function Chat() {
         signal: abortControllerRef.current.signal,
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error?.message || "An unknown error occurred."
+        );
+      }
+
       if (!response.body) return;
 
       const reader = response.body.getReader();
@@ -99,6 +106,13 @@ export function Chat() {
     } catch (error: any) {
       if (error.name !== "AbortError") {
         console.error("Failed to send message:", error);
+        const errorMessage: ChatMessage = {
+          sender: "ai",
+          text: `Sorry, something went wrong: ${error.message}`,
+          timestamp: new Date().toISOString(),
+          isError: true,
+        };
+        setMessages((prev) => [...prev, errorMessage]);
       }
     } finally {
       setIsLoading(false);
