@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useRef } from "react";
 import { type ChatMessage } from "@/types";
 import { ChatMessage as ChatMessageComponent } from "./ChatMessage";
@@ -46,6 +48,7 @@ export function Chat() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.log(errorData);
         throw new Error(
           errorData.error?.message || "An unknown error occurred."
         );
@@ -65,42 +68,30 @@ export function Chat() {
           break;
         }
 
-        const chunk = decoder.decode(value, { stream: true });
+        const content = decoder.decode(value, { stream: true });
+        aiResponseText += content;
 
-        const jsonStrings = chunk.match(/data: (.*)/g);
-        if (!jsonStrings) continue;
-
-        for (const jsonString of jsonStrings) {
-          try {
-            const data = JSON.parse(jsonString.substring(5));
-            if (data.type === "token" && data.content) {
-              aiResponseText += data.content;
-              if (!initialChunkReceived) {
-                initialChunkReceived = true;
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    sender: "ai",
-                    text: data.content,
-                    timestamp: new Date().toISOString(),
-                  },
-                ]);
-              } else {
-                setMessages((prev) => {
-                  const lastMessage = prev[prev.length - 1];
-                  if (lastMessage.sender === "ai") {
-                    return [
-                      ...prev.slice(0, -1),
-                      { ...lastMessage, text: lastMessage.text + data.content },
-                    ];
-                  }
-                  return prev;
-                });
-              }
+        if (!initialChunkReceived) {
+          initialChunkReceived = true;
+          setMessages((prev) => [
+            ...prev,
+            {
+              sender: "ai",
+              text: content,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+        } else {
+          setMessages((prev) => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage.sender === "ai") {
+              return [
+                ...prev.slice(0, -1),
+                { ...lastMessage, text: lastMessage.text + content },
+              ];
             }
-          } catch (e) {
-            // Ignore parsing errors
-          }
+            return prev;
+          });
         }
       }
     } catch (error: any) {
