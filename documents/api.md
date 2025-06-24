@@ -93,25 +93,48 @@ AI 에이전트와 실시간 대화를 수행합니다.
 
     data: "with that."
 
-    data: "[DONE]"
+    // The stream is composed of JSON objects, and ends when the stream closes.
+    data: {"type": "token", "content": "Hello! "}
+    data: {"type": "token", "content": "I can help."}
+    data: {"type": "end"}
     ```
 
     - 스트림의 끝은 `[DONE]`과 같은 특별한 메시지로 표시될 수 있습니다.
 
-  - **실패 (500 Internal Server Error)**: 백엔드에서 AI 에이전트 처리 중 오류 발생.
+  - **실패 (400, 500 등)**: 표준 에러 응답 객체를 반환합니다. (아래 'Error Handling' 섹션 참조)
 
 ---
 
-## 3. 공유 데이터 타입 (`apps/types`)
+## 3. 에러 핸들링 (Error Handling)
+
+모든 API 요청 실패 시, 백엔드는 다음과 같은 표준화된 에러 객체를 `JSON` 형식으로 반환합니다.
+
+```json
+{
+  "statusCode": 500,
+  "timestamp": "2023-10-28T10:30:00Z",
+  "path": "/api/chat",
+  "error": {
+    "message": "Failed to connect to Gemini API.",
+    "stack": "..." // (개발 환경에서만 포함될 수 있음)
+  }
+}
+```
+
+---
+
+## 4. 공유 데이터 타입 (`packages/types`)
 
 프론트엔드와 백엔드 간의 데이터 일관성을 위해 모노레포의 공유 패키지에서 아래와 같은 타입을 정의하고 사용합니다.
 
 ```typescript
-// apps/types/index.ts
+// packages/types/src/index.ts
 
 export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
+  sender: "user" | "ai";
+  text: string;
+  timestamp: string;
+  isError?: boolean;
 }
 
 export interface Correction {
