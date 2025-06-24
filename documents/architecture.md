@@ -81,10 +81,10 @@ graph TB
 ### 2.3. 공유 타입 시스템
 
 ```typescript
-// apps/types/src/chat.ts 예시
+// apps/types/src/index.ts 예시
 export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
+  sender: "user" | "ai";
+  text: string;
   timestamp: string;
 }
 
