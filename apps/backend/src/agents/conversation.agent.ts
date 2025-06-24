@@ -7,6 +7,8 @@ import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
+import { BaseMessage } from '@langchain/core/messages';
+import { Runnable } from '@langchain/core/runnables';
 
 @Injectable()
 export class ConversationAgent extends AbstractAgent {
@@ -18,7 +20,10 @@ export class ConversationAgent extends AbstractAgent {
     );
   }
 
-  async run(context: OrchestratorInput): Promise<string> {
+  async run(
+    context: OrchestratorInput,
+    options?: { stream?: boolean },
+  ): Promise<string | Runnable<any, BaseMessage>> {
     const { userProfile, newsAnalysis, correction, chatHistory } = context;
 
     const prompt = ChatPromptTemplate.fromMessages([
@@ -60,6 +65,10 @@ export class ConversationAgent extends AbstractAgent {
     ]);
 
     const chain = prompt.pipe(this.llm);
+
+    if (options?.stream) {
+      return chain;
+    }
 
     const result = await chain.invoke({
       chat_history: chatHistory,
