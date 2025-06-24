@@ -11,7 +11,7 @@ export class ProfileService {
     if (!userProfile) {
       // If no profile exists, create a default one
       const defaultProfile: UserProfile = {
-        userName: 'New User',
+        name: 'New User',
         interests: ['technology', 'news', 'language learning'],
         learningLevel: 'intermediate',
         recentCorrections: [],
