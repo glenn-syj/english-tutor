@@ -8,7 +8,6 @@ export class StorageService {
   private readonly userProfilePath = path.resolve(
     __dirname,
     '..',
-    '..',
     'data',
     'user_profile.json',
   );
