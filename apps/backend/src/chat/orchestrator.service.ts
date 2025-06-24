@@ -14,6 +14,7 @@ import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 
 const ARTICLE_SYSTEM_MESSAGE_PREFIX = 'SYSTEM_ARTICLE:';
 const ARTICLE_STREAM_PREFIX = 'SYSTEM_MESSAGE::';
+const CORRECTION_STREAM_PREFIX = 'CORRECTION_MESSAGE::';
 
 const convertToLangChainMessages = (messages: ChatMessage[]): BaseMessage[] => {
   return messages
@@ -98,6 +99,14 @@ export class OrchestratorService {
     }
 
     const correction = await this.correctionAgent.run(message);
+    if (correction.has_errors) {
+      const correctionPayload = `${CORRECTION_STREAM_PREFIX}${JSON.stringify(
+        correction,
+      )}\n`;
+      console.log('[Orchestrator] Prepending correction message to stream.');
+      yield correctionPayload;
+    }
+
     const langChainHistory = convertToLangChainMessages(fullHistory);
 
     console.log('[Orchestrator] Invoking ConversationAgent...');
@@ -106,7 +115,6 @@ export class OrchestratorService {
         userProfile,
         newsAnalysis,
         correction,
-        chatHistory: langChainHistory,
       },
       {
         stream: true,
@@ -114,9 +122,6 @@ export class OrchestratorService {
     )) as Runnable<any, any>;
 
     const stream = await chain.pipe(new StringOutputParser()).stream({
-      user_profile: JSON.stringify(userProfile),
-      news_analysis: JSON.stringify(newsAnalysis),
-      correction: JSON.stringify(correction),
       chat_history: langChainHistory,
       user_message: message,
     });
