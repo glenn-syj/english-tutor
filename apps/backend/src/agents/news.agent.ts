@@ -16,6 +16,7 @@ export class NewsAgent extends AbstractAgent {
     );
     this.searchTool = new TavilySearchResults({
       apiKey: this.configService.get<string>('TAVILY_API_KEY'),
+      maxResults: 1,
     });
   }
 
@@ -24,10 +25,23 @@ export class NewsAgent extends AbstractAgent {
       ', ',
     )}. The article should be suitable for an intermediate English learner.`;
 
-    const searchResults = await this.searchTool.invoke(query);
+    const searchResultString = await this.searchTool.invoke(query);
+
+    if (!searchResultString) {
+      // Return a default article or throw an error
+      return {
+        title: 'No Article Found',
+        source: 'N/A',
+        url: '',
+        fullText:
+          "Sorry, I couldn't find a suitable news article about your interests. Let's try another topic.",
+      };
+    }
+
+    // The result is a stringified JSON array, so we need to parse it.
+    const searchResults = JSON.parse(searchResultString);
 
     if (searchResults.length === 0) {
-      // Return a default article or throw an error
       return {
         title: 'No Article Found',
         source: 'N/A',
