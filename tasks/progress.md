@@ -23,8 +23,8 @@
 
 ### Phase 3: 프론트엔드 개발 (Frontend)
 
-- [ ] **8. Next.js 프론트엔드 프로젝트 초기화**: `apps/frontend`에 Next.js(App Router) 프로젝트를 생성하고, `apps/types` 공유 패키지 연동
-- [ ] **9. 채팅 UI 컴포넌트 구현**: 대화 기록, 메시지 입력창, 전송 버튼 등 기본적인 채팅 UI를 정적 컴포넌트로 구현 (e.g., Tailwind CSS 사용)
+- [x] **8. Next.js 프론트엔드 프로젝트 초기화**: `apps/frontend`에 Next.js(App Router) 프로젝트를 생성하고, `apps/types` 공유 패키지 연동
+- [x] **9. 채팅 UI 컴포넌트 구현**: 대화 기록, 메시지 입력창, 전송 버튼 등 기본적인 채팅 UI를 정적 컴포넌트로 구현 (e.g., Tailwind CSS 사용)
 - [ ] **10. API 연동 및 스트리밍 처리**: 백엔드 `/api/chat` API와 연동하고, Server-Sent Events(SSE)로 수신되는 응답을 실시간으로 화면에 렌더링
 - [ ] **11. 음성 입출력 기능 구현**: Web Speech API를 사용하여 음성-텍스트 변환(STT) 및 텍스트-음성 변환(TTS) 기능 구현
 
