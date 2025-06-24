@@ -1,13 +1,17 @@
 {
   "name": "english_agents",
   "version": "1.0.0",
-  "description": "",
+  "description": "This is the root of the monorepo.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "concurrently \"pnpm --filter frontend dev\" \"pnpm --filter backend start:dev\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.11.0"
+  "packageManager": "pnpm@10.11.0",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
 }
