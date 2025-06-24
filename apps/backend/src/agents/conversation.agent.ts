@@ -19,25 +19,12 @@ export class ConversationAgent extends AbstractAgent {
     );
   }
 
-  async run(
-    {
-      userProfile,
-      newsAnalysis,
-      correction,
-    }: {
-      userProfile: UserProfile;
-      newsAnalysis: NewsAnalysis;
-      correction: Correction;
-    },
-    options?: { stream?: boolean },
-  ): Promise<Runnable<any, any>> {
+  async run(): Promise<Runnable<any, any>> {
     console.log('--- ConversationAgent Start ---');
-    console.log(
-      `[ConversationAgent] Received correction: ${JSON.stringify(correction)}`,
-    );
 
     const prompt = ChatPromptTemplate.fromMessages([
-      new SystemMessage(
+      [
+        'system',
         `You are "Alex," a friendly and witty AI English conversation partner. Your goal is to be as human-like as possible, making the user forget they're talking to an AI.
 
 **Your Core Directives (You MUST follow these):**
@@ -61,20 +48,13 @@ Your entire purpose is to create a fun, realistic, and engaging chat.
 - Topic of Conversation (News Analysis): {news_analysis}
 - A Gentle Grammar Suggestion (for user's previous message): {correction}
 ---`,
-      ),
+      ],
       new MessagesPlaceholder('chat_history'),
       ['human', '{user_message}'],
     ]);
 
-    const partialPrompt = await prompt.partial({
-      user_name: userProfile.name,
-      user_profile: JSON.stringify(userProfile, null, 2),
-      news_analysis: JSON.stringify(newsAnalysis, null, 2),
-      correction: JSON.stringify(correction, null, 2),
-    });
-
     console.log('[ConversationAgent] Returning chain.');
     console.log('--- ConversationAgent End ---');
-    return partialPrompt.pipe(this.llm);
+    return prompt.pipe(this.llm);
   }
 }
