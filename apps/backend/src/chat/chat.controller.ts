@@ -1,8 +1,7 @@
-import { Body, Controller, Post, Sse } from '@nestjs/common';
+import { Body, Controller, Post, Res } from '@nestjs/common';
 import { ChatMessage } from '../../../types/src';
 import { OrchestratorService } from './orchestrator.service';
-import { Observable, from } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Response } from 'express';
 
 interface ChatRequestBody {
   history: ChatMessage[];
@@ -13,23 +12,36 @@ interface ChatRequestBody {
 export class ChatController {
   constructor(private readonly orchestratorService: OrchestratorService) {}
 
-  @Sse()
   @Post()
-  async handleChat(
-    @Body() body: ChatRequestBody,
-  ): Promise<Observable<{ data: string }>> {
-    const stream = await this.orchestratorService.process(
-      body.history,
-      body.message,
-    );
+  async handleChat(@Body() body: ChatRequestBody, @Res() response: Response) {
+    try {
+      const stream = await this.orchestratorService.process(
+        body.history,
+        body.message,
+      );
 
-    const textDecoder = new TextDecoder();
-    const observable = from(stream).pipe(
-      map((chunk) => {
-        return { data: textDecoder.decode(chunk as Uint8Array) };
-      }),
-    );
+      response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      response.setHeader('Transfer-Encoding', 'chunked');
 
-    return observable;
+      const reader = stream.getReader();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        response.write(value);
+      }
+      response.end();
+    } catch (error) {
+      console.error('Error in handleChat:', error);
+      if (!response.headersSent) {
+        response
+          .status(500)
+          .json({ message: 'An error occurred during streaming' });
+      } else {
+        response.end();
+      }
+    }
   }
 }
