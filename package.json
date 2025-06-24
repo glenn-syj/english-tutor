@@ -13,5 +13,8 @@
   "packageManager": "pnpm@10.11.0",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "ai": "^4.3.16"
   }
 }
