@@ -1,41 +1,41 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AbstractAgent } from './agent.abstract';
-import { ChatMessage, Correction } from '../../../types/src';
+import { Correction } from '../../../types/src';
 import { z } from 'zod';
 import { StructuredOutputParser } from 'langchain/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
-import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 
+// New, more detailed schema for comprehensive feedback
 const correctionSchema = z.object({
-  has_errors: z
+  is_perfect: z
     .boolean()
-    .describe('Set to true if there are errors, false otherwise.'),
+    .describe(
+      'Set to true ONLY if the sentence is grammatically perfect AND sounds completely natural. Otherwise, set to false.',
+    ),
+  correction_type: z
+    .enum(['Grammar', 'Nuance', 'Style', 'Clarity', 'Perfect'])
+    .describe(
+      "The main category of the suggestion. If 'is_perfect' is true, use 'Perfect'.",
+    ),
   original: z.string().describe('The original user message.'),
   corrected: z
     .string()
     .describe(
-      'The corrected version of the message. If no errors, this should be the same as the original text.',
+      'The improved version of the message. If the sentence is perfect, this should be the same as the original text.',
     ),
   explanation: z
     .string()
     .describe(
-      'A brief explanation of the corrections. If there are no errors, provide a short, encouraging feedback message here.',
+      'A detailed but easy-to-understand explanation of WHY the change improves the sentence. Focus on nuance or style if the grammar was correct.',
+    ),
+  alternatives: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'A few other natural ways to phrase the same idea, if applicable.',
     ),
 });
-
-const convertToLangChainMessages = (messages: ChatMessage[]): BaseMessage[] => {
-  return messages
-    .filter((message) => message.sender !== 'system') // Filter out internal system messages
-    .map((message) => {
-      if (message.sender === 'user') {
-        return new HumanMessage(message.text);
-      } else {
-        // Assumes 'assistant'
-        return new AIMessage(message.text);
-      }
-    });
-};
 
 @Injectable()
 export class CorrectionAgent extends AbstractAgent {
@@ -45,7 +45,7 @@ export class CorrectionAgent extends AbstractAgent {
     super(
       configService,
       'Correction Agent',
-      "Analyzes the user's last message for grammatical errors and provides corrections.",
+      "Analyzes the user's last message for grammatical errors, nuance, and style.",
     );
   }
 
@@ -54,35 +54,60 @@ export class CorrectionAgent extends AbstractAgent {
     console.log(`[CorrectionAgent] Received message: "${userMessage}"`);
 
     const prompt = PromptTemplate.fromTemplate(
-      `You are an English teacher. Analyze the user's message for errors.
+      `You are an expert English language coach. Your primary goal is to help the user sound more like a natural, fluent native speaker.
+
+Analyze the user's message not just for grammatical errors, but for these deeper aspects:
+- **Nuance & Precision**: Is the word choice the best one? Does it convey the intended emotion and meaning accurately?
+- **Clarity & Flow**: Is the sentence structure clear and easy to follow? Could it be more concise or elegant?
+- **Style & Naturalness**: Does it sound like something a native speaker would actually say in a casual conversation? Is it idiomatic?
+
 User's message: "{user_message}"
-Based on your analysis, provide a corrected version and an explanation.
-If there are no errors, provide positive feedback in the explanation field.
-Your output must be a JSON object that strictly follows this format:
+
+Based on your comprehensive analysis, provide structured feedback.
+- If the sentence is already perfect (grammatically correct AND sounds natural), set "is_perfect" to true and write an encouraging, specific feedback in the "explanation" field.
+- If there's any room for improvement (even if it's a minor stylistic choice), suggest a better version in "corrected".
+- Classify your main suggestion using the "correction_type".
+- Your "explanation" is the most important part. Explain *why* your suggestion is better. If the original was grammatically correct, focus on explaining the subtle differences in nuance, style, or clarity.
+- If applicable, provide a few "alternatives" to show other natural ways to express the same idea.
+
+Your output MUST be a JSON object that strictly follows this format:
 {format_instructions}`,
     );
 
     const chain = prompt.pipe(this.llm).pipe(this.parser);
-    const result = (await chain.invoke({
+    const result = await chain.invoke({
       user_message: userMessage,
       format_instructions: this.parser.getFormatInstructions(),
-    })) as z.infer<typeof correctionSchema>;
+    });
 
-    if (result.has_errors) {
-      console.log('[CorrectionAgent] Found errors and returning correction.');
-      console.log('--- CorrectionAgent End ---');
-      return {
-        has_errors: true,
-        original: result.original,
-        corrected: result.corrected,
-        explanation: result.explanation,
-      };
-    } else {
+    // Adapt the new rich result to the existing Correction type.
+    // NOTE: For full functionality, the shared 'Correction' type in `apps/types` should be updated
+    // to match the new `correctionSchema` structure.
+    if (result.is_perfect) {
       console.log('[CorrectionAgent] No errors found.');
       console.log('--- CorrectionAgent End ---');
       return {
         has_errors: false,
         feedback: result.explanation,
+      };
+    } else {
+      console.log(
+        `[CorrectionAgent] Found improvement of type: ${result.correction_type}.`,
+      );
+      console.log('--- CorrectionAgent End ---');
+      // We are passing richer information here. The 'explanation' can now contain style tips.
+      // 'alternatives' are currently not passed but could be added to the explanation.
+      const fullExplanation =
+        `${result.explanation}` +
+        (result.alternatives && result.alternatives.length > 0
+          ? `\n\n**Alternatives:**\n- ${result.alternatives.join('\n- ')}`
+          : '');
+
+      return {
+        has_errors: true,
+        original: result.original,
+        corrected: result.corrected,
+        explanation: fullExplanation,
       };
     }
   }
