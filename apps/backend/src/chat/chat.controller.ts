@@ -13,9 +13,9 @@ export class ChatController {
   constructor(private readonly orchestratorService: OrchestratorService) {}
 
   @Post()
-  handleChat(@Body() body: ChatRequestBody, @Res() response: Response) {
+  async handleChat(@Body() body: ChatRequestBody, @Res() response: Response) {
     try {
-      const stream = this.orchestratorService.process(
+      const stream = await this.orchestratorService.process(
         body.history,
         body.message,
       );
