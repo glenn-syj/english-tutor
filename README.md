@@ -26,6 +26,7 @@ English Agents는 AI 기반의 개인화된 영어 회화 학습 서비스입니
 - Node.js 18 이상
 - pnpm 8 이상
 - Google Gemini API 키
+- Tavily API 키
 
 ### 설치 및 실행
 
@@ -53,15 +54,13 @@ TAVILIY_API_KEY=your_api_key_here
 
 4. 개발 서버 실행
 
-```bash
-# 백엔드 서버 실행
-pnpm --filter backend dev
+윈도우 환경
 
-# 프론트엔드 서버 실행 (새 터미널에서)
-pnpm --filter frontend dev
+```
+./start.sh 실행
 ```
 
-5. 브라우저에서 `http://localhost:3001` 접속
+5. 브라우저에서 `http://localhost:3001` 접속 혹은 새로고침
 
 ## 프로젝트 구조
 
