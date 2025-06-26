@@ -20,10 +20,8 @@ export class NewsAgent extends AbstractAgent {
     });
   }
 
-  async run(interests: string[]): Promise<NewsArticle> {
-    const query = `Find a recent, interesting news article about one of the following topics: ${interests.join(
-      ', ',
-    )}. The article should be suitable for an intermediate English learner.`;
+  async run(message: string): Promise<NewsArticle> {
+    const query = `Find a recent, interesting news article based on the topic from the following user message: "${message}". The article should be suitable for an intermediate English learner.`;
 
     const searchResultString = await this.searchTool.invoke(query);
 
