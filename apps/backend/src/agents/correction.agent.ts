@@ -16,7 +16,7 @@ const correctionSchema = z.object({
   correction_type: z
     .enum(['Grammar', 'Nuance', 'Style', 'Clarity', 'Perfect'])
     .describe(
-      "The main category of the suggestion. If 'is_perfect' is true, use 'Perfect'.",
+      "The main category of the suggestion. If 'is_perfect' is true, this MUST be 'Perfect'. Otherwise, it must be one of the other four types.",
     ),
   original: z.string().describe('The original user message.'),
   corrected: z
@@ -80,14 +80,11 @@ Your output MUST be a JSON object that strictly follows this format:
       format_instructions: this.parser.getFormatInstructions(),
     });
 
-    // Adapt the new rich result to the existing Correction type.
-    // NOTE: For full functionality, the shared 'Correction' type in `apps/types` should be updated
-    // to match the new `correctionSchema` structure.
-    if (result.is_perfect) {
+    if (result.is_perfect || result.correction_type === 'Perfect') {
       console.log('[CorrectionAgent] No errors found.');
       console.log('--- CorrectionAgent End ---');
       return {
-        has_errors: false,
+        has_suggestion: false,
         feedback: result.explanation,
       };
     } else {
@@ -95,19 +92,18 @@ Your output MUST be a JSON object that strictly follows this format:
         `[CorrectionAgent] Found improvement of type: ${result.correction_type}.`,
       );
       console.log('--- CorrectionAgent End ---');
-      // We are passing richer information here. The 'explanation' can now contain style tips.
-      // 'alternatives' are currently not passed but could be added to the explanation.
-      const fullExplanation =
-        `${result.explanation}` +
-        (result.alternatives && result.alternatives.length > 0
-          ? `\n\n**Alternatives:**\n- ${result.alternatives.join('\n- ')}`
-          : '');
 
       return {
-        has_errors: true,
+        has_suggestion: true,
         original: result.original,
         corrected: result.corrected,
-        explanation: fullExplanation,
+        explanation: result.explanation,
+        correction_type: result.correction_type as
+          | 'Grammar'
+          | 'Nuance'
+          | 'Style'
+          | 'Clarity',
+        alternatives: result.alternatives,
       };
     }
   }
