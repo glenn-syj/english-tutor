@@ -76,150 +76,82 @@ export function Chat() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let aiResponseText = "";
+      let buffer = "";
       let currentAssistantMessage = "";
-      const systemMessagePrefix = "SYSTEM_MESSAGE::";
-      const correctionMessagePrefix = "CORRECTION_MESSAGE::";
       let assistantMessageTimestamp: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
-        console.log("[Chat] Stream iteration:", { done, value });
-
         if (done) {
-          if (currentAssistantMessage.trim() && assistantMessageTimestamp) {
-            speak(currentAssistantMessage);
-            setCurrentlyPlayingId(assistantMessageTimestamp);
-          }
           break;
         }
 
-        const chunk = decoder.decode(value, { stream: true });
-        console.log("[Chat] Decoded chunk:", chunk);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // Keep the potentially incomplete last line
 
-        let remainingChunk = chunk;
+        for (const line of lines) {
+          if (!line) continue;
 
-        // Check for our special system message at the beginning of the chunk
-        if (remainingChunk.startsWith(systemMessagePrefix)) {
-          const jsonStringStartIndex = systemMessagePrefix.length;
-          let braceCount = 0;
-          let jsonStringEndIndex = -1;
+          try {
+            const messageObject = JSON.parse(line);
+            const { type, payload } = messageObject;
 
-          // Find the end of the JSON object by counting braces
-          for (let i = jsonStringStartIndex; i < remainingChunk.length; i++) {
-            const char = remainingChunk[i];
-            if (char === "{") {
-              braceCount++;
-            } else if (char === "}") {
-              braceCount--;
-            }
-            // When braceCount is 0, we've found the end of the top-level object
-            if (braceCount === 0 && i >= jsonStringStartIndex) {
-              jsonStringEndIndex = i + 1;
-              break;
-            }
-          }
-
-          if (jsonStringEndIndex !== -1) {
-            const systemMessageJson = remainingChunk.substring(
-              jsonStringStartIndex,
-              jsonStringEndIndex
-            );
-            console.log("[Chat] System message found:", systemMessageJson);
-
-            try {
-              const systemMessage = JSON.parse(systemMessageJson);
-              setMessages((prev) => {
-                console.log("[Chat] Adding system message to state.");
-                return [...prev, systemMessage];
-              });
-            } catch (e) {
-              console.error("Failed to parse system message", e);
-            }
-            // The rest of the chunk is the start of the AI's response
-            remainingChunk = remainingChunk.substring(jsonStringEndIndex);
-          }
-        }
-
-        // Check for our special correction message
-        if (remainingChunk.startsWith(correctionMessagePrefix)) {
-          const jsonStringStartIndex = correctionMessagePrefix.length;
-          let braceCount = 0;
-          let jsonStringEndIndex = -1;
-
-          // Find the end of the JSON object by counting braces
-          for (let i = jsonStringStartIndex; i < remainingChunk.length; i++) {
-            const char = remainingChunk[i];
-            if (char === "{") {
-              braceCount++;
-            } else if (char === "}") {
-              braceCount--;
-            }
-            if (braceCount === 0 && i >= jsonStringStartIndex) {
-              jsonStringEndIndex = i + 1;
-              break;
-            }
-          }
-
-          if (jsonStringEndIndex !== -1) {
-            const correctionJson = remainingChunk.substring(
-              jsonStringStartIndex,
-              jsonStringEndIndex
-            );
-            console.log("[Chat] Correction message found:", correctionJson);
-            try {
-              const correction = JSON.parse(correctionJson);
-              setMessages((prev) => {
-                const lastMessage = prev[prev.length - 1];
-                if (lastMessage?.sender === "user") {
-                  return [
-                    ...prev.slice(0, -1),
-                    { ...lastMessage, correction: correction },
-                  ];
+            switch (type) {
+              case "system-article":
+                setMessages((prev) => [...prev, payload]);
+                break;
+              case "correction":
+                setMessages((prev) => {
+                  const lastMessage = prev[prev.length - 1];
+                  if (lastMessage?.sender === "user") {
+                    return [
+                      ...prev.slice(0, -1),
+                      { ...lastMessage, correction: payload },
+                    ];
+                  }
+                  return prev;
+                });
+                break;
+              case "chunk":
+                currentAssistantMessage += payload;
+                setMessages((prev) => {
+                  const lastMessage = prev[prev.length - 1];
+                  if (lastMessage?.sender === "assistant") {
+                    return [
+                      ...prev.slice(0, -1),
+                      { ...lastMessage, text: lastMessage.text + payload },
+                    ];
+                  } else {
+                    if (!assistantMessageTimestamp) {
+                      assistantMessageTimestamp = new Date().toISOString();
+                    }
+                    return [
+                      ...prev,
+                      {
+                        sender: "assistant",
+                        text: payload,
+                        timestamp: assistantMessageTimestamp,
+                      },
+                    ];
+                  }
+                });
+                break;
+              case "end":
+                if (
+                  currentAssistantMessage.trim() &&
+                  assistantMessageTimestamp
+                ) {
+                  speak(currentAssistantMessage);
+                  setCurrentlyPlayingId(assistantMessageTimestamp);
                 }
-                return prev;
-              });
-            } catch (e) {
-              console.error("Failed to parse correction message", e);
+                break;
+              default:
+                console.warn(`Unknown stream message type: ${type}`);
             }
-            // The rest of the chunk might be the start of the AI's response
-            remainingChunk = remainingChunk
-              .substring(jsonStringEndIndex)
-              .trimStart();
+          } catch (e) {
+            console.error("Failed to parse stream line:", line, e);
           }
-        }
-
-        if (remainingChunk) {
-          aiResponseText += remainingChunk;
-          currentAssistantMessage += remainingChunk;
-
-          setMessages((prev) => {
-            console.log(
-              "[Chat] Updating assistant message state with chunk:",
-              remainingChunk
-            );
-            const lastMessage = prev[prev.length - 1];
-            // If the last message is from the assistant, update it.
-            if (lastMessage?.sender === "assistant") {
-              return [
-                ...prev.slice(0, -1),
-                { ...lastMessage, text: lastMessage.text + remainingChunk },
-              ];
-            } else {
-              // Otherwise, add a new assistant message.
-              if (!assistantMessageTimestamp) {
-                assistantMessageTimestamp = new Date().toISOString();
-              }
-              return [
-                ...prev,
-                {
-                  sender: "assistant",
-                  text: remainingChunk,
-                  timestamp: assistantMessageTimestamp,
-                },
-              ];
-            }
-          });
         }
       }
     } catch (error: any) {
