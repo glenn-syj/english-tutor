@@ -20,7 +20,7 @@ export interface CorrectionFeedback {
   /** A detailed explanation of why the correction improves the sentence. */
   explanation: string;
   /** The primary category of the feedback. */
-  correction_type: "Grammar" | "Nuance" | "Style" | "Clarity";
+  correction_type: "Grammar" | "Vocabulary" | "Clarity" | "Cohesion";
   /** Optional list of other natural ways to phrase the same idea. */
   alternatives?: string[];
 }

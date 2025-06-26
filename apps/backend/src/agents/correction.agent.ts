@@ -5,35 +5,41 @@ import { Correction } from '../../../types/src';
 import { z } from 'zod';
 import { StructuredOutputParser } from 'langchain/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
+import {
+  ChatPromptTemplate,
+  MessagesPlaceholder,
+} from '@langchain/core/prompts';
+import { Runnable } from '@langchain/core/runnables';
+import { StringOutputParser } from '@langchain/core/output_parsers';
 
 // New, more detailed schema for comprehensive feedback
 const correctionSchema = z.object({
-  is_perfect: z
+  is_proficient: z
     .boolean()
     .describe(
-      'Set to true ONLY if the sentence is grammatically perfect AND sounds completely natural. Otherwise, set to false.',
+      'Set to true ONLY if the sentence is grammatically flawless, uses precise vocabulary, and is well-structured for a speaking test like IELTS/OPIC. Otherwise, set to false.',
     ),
   correction_type: z
-    .enum(['Grammar', 'Nuance', 'Style', 'Clarity', 'Perfect'])
+    .enum(['Grammar', 'Vocabulary', 'Clarity', 'Cohesion', 'Proficient'])
     .describe(
-      "The main category of the suggestion. If 'is_perfect' is true, this MUST be 'Perfect'. Otherwise, it must be one of the other four types.",
+      "The main category of the suggestion. If 'is_proficient' is true, this MUST be 'Proficient'. Otherwise, it must be one of the other four types.",
     ),
   original: z.string().describe('The original user message.'),
   corrected: z
     .string()
     .describe(
-      'The improved version of the message. If the sentence is perfect, this should be the same as the original text.',
+      'The improved version of the message. If the sentence is already proficient, this should be the same as the original text.',
     ),
   explanation: z
     .string()
     .describe(
-      'A detailed but easy-to-understand explanation of WHY the change improves the sentence. Focus on nuance or style if the grammar was correct.',
+      'A detailed, educational explanation of WHY the change would lead to a higher score in a speaking test. Reference specific concepts like lexical resource, coherence, or grammatical range.',
     ),
   alternatives: z
     .array(z.string())
     .optional()
     .describe(
-      'A few other natural ways to phrase the same idea, if applicable.',
+      'A few other ways to phrase the same idea, showcasing different structures or advanced vocabulary.',
     ),
 });
 
@@ -54,33 +60,55 @@ export class CorrectionAgent extends AbstractAgent {
     console.log(`[CorrectionAgent] Received message: "${userMessage}"`);
 
     const prompt = PromptTemplate.fromTemplate(
-      `You are an expert English language coach. Your primary goal is to help the user sound more like a natural, fluent native speaker.
+      `You are an expert English language examiner, specializing in speaking tests like IELTS and OPIC. Your goal is to provide feedback that helps the user achieve a higher score.
 
-Analyze the user's message not just for grammatical errors, but for these deeper aspects:
-- **Nuance & Precision**: Is the word choice the best one? Does it convey the intended emotion and meaning accurately?
-- **Clarity & Flow**: Is the sentence structure clear and easy to follow? Could it be more concise or elegant?
-- **Style & Naturalness**: Does it sound like something a native speaker would actually say in a casual conversation? Is it idiomatic?
+Analyze the user's message based on key scoring criteria:
+- **Grammatical Range and Accuracy**: Are there errors? Is there a variety of complex structures?
+- **Lexical Resource (Vocabulary)**: Is the vocabulary precise and sophisticated? Are idiomatic expressions used correctly?
+- **Coherence**: Do the ideas link together logically? Are cohesive devices (e.g., 'however', 'therefore', 'in addition') used effectively?
+- **Clarity**: Is the message easy to understand? Could it be more direct or better structured?
 
 User's message: "{user_message}"
 
-Based on your comprehensive analysis, provide structured feedback.
-- If the sentence is already perfect (grammatically correct AND sounds natural), set "is_perfect" to true and write an encouraging, specific feedback in the "explanation" field.
-- If there's any room for improvement (even if it's a minor stylistic choice), suggest a better version in "corrected".
-- Classify your main suggestion using the "correction_type".
-- Your "explanation" is the most important part. Explain *why* your suggestion is better. If the original was grammatically correct, focus on explaining the subtle differences in nuance, style, or clarity.
-- If applicable, provide a few "alternatives" to show other natural ways to express the same idea.
+Based on this, provide structured feedback.
+- If the sentence is already "proficient" (grammatically perfect, good vocabulary, well-structured), set "is_proficient" to true and provide encouraging feedback in the "explanation" field, highlighting what they did well.
+- If there's any room for improvement, suggest a better version in "corrected".
+- Classify your main suggestion using the "correction_type". Your feedback MUST be targeted and educational.
+- Your "explanation" is the most important part. Explain *why* your suggestion improves the answer from a test-scorer's perspective. For example, "Using 'whereas' here demonstrates your ability to use complex sentences, which is a high-level skill."
+- If applicable, provide a few "alternatives" to show other high-scoring ways to express the idea.
 
-Your output MUST be a JSON object that strictly follows this format:
+Your response MUST be a single, valid, and complete JSON object that strictly follows the format instructions below. Do not add any text or formatting like markdown code blocks before or after the JSON object.
 {format_instructions}`,
     );
 
-    const chain = prompt.pipe(this.llm).pipe(this.parser);
-    const result = await chain.invoke({
+    const chain = prompt.pipe(this.llm).pipe(new StringOutputParser());
+    const llmOutput = await chain.invoke({
       user_message: userMessage,
       format_instructions: this.parser.getFormatInstructions(),
     });
 
-    if (result.is_perfect || result.correction_type === 'Perfect') {
+    try {
+      // Clean the output from markdown code blocks
+      const cleanedOutput = llmOutput.replace(/```json\n|```/g, '').trim();
+      const result = await this.parser.parse(cleanedOutput);
+      return this.formatResult(result);
+    } catch (e) {
+      console.error('[CorrectionAgent] Initial parsing failed. Retrying...', e);
+      // Re-invoke the chain with a retry mechanism built-in
+      const retryChain = prompt.pipe(this.llm).pipe(this.parser).withRetry({
+        stopAfterAttempt: 2,
+      });
+
+      const result = await retryChain.invoke({
+        user_message: userMessage,
+        format_instructions: this.parser.getFormatInstructions(),
+      });
+      return this.formatResult(result);
+    }
+  }
+
+  private formatResult(result: z.infer<typeof correctionSchema>): Correction {
+    if (result.is_proficient || result.correction_type === 'Proficient') {
       console.log('[CorrectionAgent] No errors found.');
       console.log('--- CorrectionAgent End ---');
       return {
@@ -100,9 +128,9 @@ Your output MUST be a JSON object that strictly follows this format:
         explanation: result.explanation,
         correction_type: result.correction_type as
           | 'Grammar'
-          | 'Nuance'
-          | 'Style'
-          | 'Clarity',
+          | 'Vocabulary'
+          | 'Clarity'
+          | 'Cohesion',
         alternatives: result.alternatives,
       };
     }
