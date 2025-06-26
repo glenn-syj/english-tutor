@@ -138,7 +138,14 @@ export class OrchestratorService {
     // 1. Run correction first and wait for the result.
     const correction = await this.correctionAgent.run(message);
 
-    // 2. Run conversation agent with the correction result.
+    // 2. Decide which message to use for the conversation context.
+    // Use the corrected message if available, otherwise use the original.
+    const messageForConversation =
+      correction.has_suggestion && correction.corrected
+        ? correction.corrected
+        : message;
+
+    // 3. Run conversation agent with the chosen message.
     const chain = (await this.conversationAgent.run()) as Runnable<any, any>;
     const langChainHistory = convertToLangChainMessages(history);
 
@@ -147,10 +154,10 @@ export class OrchestratorService {
       .stream({
         user_name: userProfile.name,
         user_profile: JSON.stringify(userProfile),
+        user_interests: userProfile.interests.join(', '),
         news_analysis: JSON.stringify(newsAnalysis),
-        correction: JSON.stringify(correction), // Pass the correction here
         chat_history: langChainHistory,
-        user_message: message,
+        user_message: messageForConversation,
       });
 
     return [correction.has_suggestion ? correction : null, conversationStream];
