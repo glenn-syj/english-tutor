@@ -11,6 +11,7 @@ import { StringOutputParser } from '@langchain/core/output_parsers';
 import { Runnable } from '@langchain/core/runnables';
 import { Readable } from 'stream';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
+import { Correction } from '../../../types/src';
 
 const ARTICLE_SYSTEM_MESSAGE_PREFIX = 'SYSTEM_ARTICLE:';
 const ARTICLE_STREAM_PREFIX = 'SYSTEM_MESSAGE::';
@@ -39,8 +40,8 @@ export class OrchestratorService {
     private readonly profileService: ProfileService,
   ) {}
 
-  process(history: ChatMessage[], message: string): Readable {
-    const stream = this.streamProcessor(history, message);
+  async process(history: ChatMessage[], message: string): Promise<Readable> {
+    const stream = await this.streamProcessor(history, message);
     return Readable.from(stream);
   }
 
@@ -61,7 +62,7 @@ export class OrchestratorService {
       msg.text.startsWith(ARTICLE_SYSTEM_MESSAGE_PREFIX),
     );
 
-    let fullHistory: ChatMessage[] = [...history];
+    const fullHistory: ChatMessage[] = [...history];
     const newChatMessage: ChatMessage = {
       sender: 'user',
       text: message,
@@ -79,7 +80,7 @@ export class OrchestratorService {
       console.log(
         '[Orchestrator] No article in history. Fetching new one based on the user message.',
       );
-      const newsArticle = await this.newsAgent.run([message]);
+      const newsArticle = await this.newsAgent.run(message);
       newsAnalysis = await this.analysisAgent.run(newsArticle);
 
       newArticleSystemMessage = {
@@ -91,41 +92,67 @@ export class OrchestratorService {
     }
 
     if (newArticleSystemMessage) {
-      const systemMessagePayload = `${ARTICLE_STREAM_PREFIX}${JSON.stringify(
-        newArticleSystemMessage,
-      )}\n`;
+      // Stream Type 1: System Article
+      const systemMessagePayload = {
+        type: 'system-article',
+        payload: newArticleSystemMessage,
+      };
+      yield JSON.stringify(systemMessagePayload) + '\n';
       console.log(
-        '[Orchestrator] Prepending new article system message to stream.',
+        '[Orchestrator] Yielding new article system message to stream.',
       );
-      yield systemMessagePayload;
     }
 
-    const correction = await this.correctionAgent.run(message);
-    if (correction.has_errors) {
-      const correctionPayload = `${CORRECTION_STREAM_PREFIX}${JSON.stringify(
-        correction,
-      )}\n`;
-      console.log('[Orchestrator] Prepending correction message to stream.');
-      yield correctionPayload;
+    const [correction, conversationStream] =
+      await this.runCorrectionAndConversation(
+        message,
+        fullHistory,
+        userProfile,
+        newsAnalysis,
+      );
+
+    if (correction) {
+      // Stream Type 2: Correction
+      const correctionPayload = { type: 'correction', payload: correction };
+      yield JSON.stringify(correctionPayload) + '\n';
+      console.log('[Orchestrator] Yielding correction message to stream.');
     }
 
-    const langChainHistory = convertToLangChainMessages(fullHistory);
-
-    console.log('[Orchestrator] Invoking ConversationAgent...');
-    const chain = (await this.conversationAgent.run()) as Runnable<any, any>;
-
-    const stream = await chain.pipe(new StringOutputParser()).stream({
-      user_name: userProfile.name,
-      user_profile: JSON.stringify(userProfile),
-      news_analysis: JSON.stringify(newsAnalysis),
-      correction: JSON.stringify(correction),
-      chat_history: langChainHistory,
-      user_message: message,
-    });
-
-    for await (const chunk of stream) {
-      yield chunk;
+    // Stream Type 3: AI response chunk
+    for await (const chunk of conversationStream) {
+      const chunkPayload = { type: 'chunk', payload: chunk };
+      yield JSON.stringify(chunkPayload) + '\n';
     }
+
+    // Stream Type 4: End of stream
+    yield JSON.stringify({ type: 'end' }) + '\n';
     console.log('--- Orchestrator End ---');
+  }
+
+  private async runCorrectionAndConversation(
+    message: string,
+    history: ChatMessage[],
+    userProfile: any,
+    newsAnalysis: any,
+  ): Promise<[Correction | null, AsyncIterable<string>]> {
+    // 1. Run correction first and wait for the result.
+    const correction = await this.correctionAgent.run(message);
+
+    // 2. Run conversation agent with the correction result.
+    const chain = (await this.conversationAgent.run()) as Runnable<any, any>;
+    const langChainHistory = convertToLangChainMessages(history);
+
+    const conversationStream = await chain
+      .pipe(new StringOutputParser())
+      .stream({
+        user_name: userProfile.name,
+        user_profile: JSON.stringify(userProfile),
+        news_analysis: JSON.stringify(newsAnalysis),
+        correction: JSON.stringify(correction), // Pass the correction here
+        chat_history: langChainHistory,
+        user_message: message,
+      });
+
+    return [correction.has_suggestion ? correction : null, conversationStream];
   }
 }
