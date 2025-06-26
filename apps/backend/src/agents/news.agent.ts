@@ -21,8 +21,9 @@ export class NewsAgent extends AbstractAgent {
   }
 
   async run(message: string): Promise<NewsArticle> {
-    const query = `Find a recent, interesting news article based on the topic from the following user message: "${message}". The article should be suitable for an intermediate English learner.`;
+    const query = `${message}`;
 
+    console.log(`[NewsAgent] Performing search with query: "${query}"`);
     const searchResultString = await this.searchTool.invoke(query);
 
     if (!searchResultString) {
