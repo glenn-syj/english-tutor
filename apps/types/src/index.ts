@@ -59,10 +59,3 @@ export interface NewsAnalysis {
   }[];
   questions: string[];
 }
-
-export interface OrchestratorInput {
-  userProfile: UserProfile;
-  newsAnalysis: NewsAnalysis;
-  correction: Correction;
-  chatHistory: ChatMessage[];
-}
