@@ -51,14 +51,13 @@ export class OrchestratorService {
     this.logger.log(`Received message: "${message}"`);
     this.logger.log(`Received history length: ${history.length}`);
 
-    const userProfile = await this.profileService.getProfile();
+    // Start independent tasks in parallel
+    const userProfilePromise = this.profileService.getProfile();
+    const articleHandlingPromise = this._handleArticle(history, message);
 
-    let newsAnalysis: NewsAnalysis;
-    let newArticleSystemMessage: ChatMessage | null = null;
-
-    const articleSystemMessage = history.find((msg) =>
-      msg.text.startsWith(ARTICLE_SYSTEM_MESSAGE_PREFIX),
-    );
+    // Await results
+    const [userProfile, { newsAnalysis, newArticleSystemMessage }] =
+      await Promise.all([userProfilePromise, articleHandlingPromise]);
 
     const fullHistory: ChatMessage[] = [...history];
     const newChatMessage: ChatMessage = {
@@ -67,26 +66,10 @@ export class OrchestratorService {
       timestamp: new Date().toISOString(),
     };
 
-    if (articleSystemMessage) {
-      this.logger.log('Existing article found in history.');
-      const articleJson = articleSystemMessage.text.substring(
-        ARTICLE_SYSTEM_MESSAGE_PREFIX.length,
-      );
-      newsAnalysis = JSON.parse(articleJson);
-      fullHistory.push(newChatMessage);
-    } else {
-      this.logger.log(
-        'No article in history. Fetching new one based on the user message.',
-      );
-      const newsArticle = await this.newsAgent.run(message);
-      newsAnalysis = await this.analysisAgent.run(newsArticle);
-
-      newArticleSystemMessage = {
-        sender: 'system',
-        text: `${ARTICLE_SYSTEM_MESSAGE_PREFIX}${JSON.stringify(newsAnalysis)}`,
-        timestamp: new Date().toISOString(),
-      };
+    if (newArticleSystemMessage) {
       fullHistory.push(newArticleSystemMessage, newChatMessage);
+    } else {
+      fullHistory.push(newChatMessage);
     }
 
     if (newArticleSystemMessage) {
@@ -123,6 +106,40 @@ export class OrchestratorService {
     // Stream Type 4: End of stream
     yield JSON.stringify({ type: 'end' }) + '\n';
     this.logger.log('--- Orchestrator End ---');
+  }
+
+  private async _handleArticle(
+    history: ChatMessage[],
+    message: string,
+  ): Promise<{
+    newsAnalysis: NewsAnalysis;
+    newArticleSystemMessage: ChatMessage | null;
+  }> {
+    const articleSystemMessage = history.find((msg) =>
+      msg.text.startsWith(ARTICLE_SYSTEM_MESSAGE_PREFIX),
+    );
+
+    if (articleSystemMessage) {
+      this.logger.log('Existing article found in history.');
+      const articleJson = articleSystemMessage.text.substring(
+        ARTICLE_SYSTEM_MESSAGE_PREFIX.length,
+      );
+      const newsAnalysis: NewsAnalysis = JSON.parse(articleJson);
+      return { newsAnalysis, newArticleSystemMessage: null };
+    }
+
+    this.logger.log(
+      'No article in history. Fetching new one based on the user message.',
+    );
+    const newsArticle = await this.newsAgent.run(message);
+    const newsAnalysis = await this.analysisAgent.run(newsArticle);
+
+    const newArticleSystemMessage: ChatMessage = {
+      sender: 'system',
+      text: `${ARTICLE_SYSTEM_MESSAGE_PREFIX}${JSON.stringify(newsAnalysis)}`,
+      timestamp: new Date().toISOString(),
+    };
+    return { newsAnalysis, newArticleSystemMessage };
   }
 
   private async runCorrectionAndConversation(
