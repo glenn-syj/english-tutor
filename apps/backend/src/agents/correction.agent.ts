@@ -41,7 +41,6 @@ const correctionSchema = z.object({
 @Injectable()
 export class CorrectionAgent extends AbstractLlmAgent {
   private parser = StructuredOutputParser.fromZodSchema(correctionSchema);
-  private context: { message: string };
 
   constructor(configService: ConfigService) {
     super(
@@ -57,7 +56,7 @@ export class CorrectionAgent extends AbstractLlmAgent {
   }
 
   protected async prepareChain(context: { message: string }): Promise<any> {
-    this.context = context;
+    const { message } = context;
     const prompt = ChatPromptTemplate.fromMessages([
       [
         'system',
@@ -87,69 +86,70 @@ Your response MUST be a single, valid, and complete JSON object that strictly fo
     return {
       prompt,
       context: {
-        message: context.message,
+        message: message,
         format_instructions: this.parser.getFormatInstructions(),
       },
+      originalMessage: message,
     };
   }
 
-  protected async callLLM(preparedData: any): Promise<string> {
+  protected async callLLM(preparedData: any): Promise<any> {
     const chain = preparedData.prompt
       .pipe(this.llm)
       .pipe(new StringOutputParser());
-    return chain.invoke(preparedData.context);
+    const llmResponse = await chain.invoke(preparedData.context);
+    return { llmResponse, originalMessage: preparedData.originalMessage };
   }
 
-  protected async processResponse(llmResponse: string): Promise<Correction> {
+  protected async processResponse(result: {
+    llmResponse: string;
+    originalMessage: string;
+  }): Promise<Correction> {
+    const { llmResponse, originalMessage } = result;
     this.logger.log(`Received raw response from LLM.`);
     try {
       // Clean the output from markdown code blocks and parse
       const cleanedOutput = llmResponse.replace(/```json\n|```/g, '').trim();
-      const result = await this.parser.parse(cleanedOutput);
-      return this.formatResult(result);
+      const parsed = await this.parser.parse(cleanedOutput);
+
+      if (parsed.is_proficient || parsed.correction_type === 'Proficient') {
+        this.logger.log('No errors found, message is proficient.');
+        return {
+          has_suggestion: false,
+          feedback: parsed.explanation,
+        };
+      } else {
+        this.logger.log(
+          `Found improvement of type: ${parsed.correction_type}.`,
+        );
+        return {
+          has_suggestion: true,
+          original: parsed.original || originalMessage,
+          corrected: parsed.corrected,
+          explanation: parsed.explanation,
+          correction_type: parsed.correction_type as
+            | 'Grammar'
+            | 'Vocabulary'
+            | 'Clarity'
+            | 'Cohesion',
+          alternatives: parsed.alternatives,
+        };
+      }
     } catch (e) {
       this.logger.error(
-        `[${this.name}] Parsing failed on the first attempt.`,
+        `[${this.name}] Parsing failed. Returning fallback.`,
         e.stack,
       );
       // NOTE: A more robust implementation could use an OutputFixingParser here
       // or re-invoke the call. For now, we return a failure state.
       return {
         has_suggestion: true,
-        original: this.context.message,
+        original: originalMessage,
         corrected: "Sorry, I couldn't process the response.",
         explanation:
           'There was an issue parsing the feedback from the AI. This is a system error.',
         correction_type: 'Clarity',
       };
-    }
-  }
-
-  private formatResult(result: z.infer<typeof correctionSchema>): Correction {
-    if (result.is_proficient || result.correction_type === 'Proficient') {
-      this.logger.log('No errors found.');
-      const response: Correction = {
-        has_suggestion: false,
-        feedback: result.explanation,
-      };
-      this.logger.log('Returning correction response:', response);
-      return response;
-    } else {
-      this.logger.log(`Found improvement of type: ${result.correction_type}.`);
-      const response: Correction = {
-        has_suggestion: true,
-        original: result.original || this.context.message,
-        corrected: result.corrected,
-        explanation: result.explanation,
-        correction_type: result.correction_type as
-          | 'Grammar'
-          | 'Vocabulary'
-          | 'Clarity'
-          | 'Cohesion',
-        alternatives: result.alternatives,
-      };
-      this.logger.log('Returning correction response:', response);
-      return response;
     }
   }
 }
