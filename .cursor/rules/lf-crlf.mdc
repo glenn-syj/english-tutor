@@ -3,4 +3,4 @@ description:
 globs: 
 alwaysApply: true
 ---
-Always use LF instead of CRLF.
+Always **use LF** instead of CRLF.
