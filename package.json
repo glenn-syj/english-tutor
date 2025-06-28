@@ -4,7 +4,7 @@
   "description": "This is the root of the monorepo.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "dev": "concurrently \"pnpm --filter frontend dev\" \"pnpm --filter backend start:dev\""
   },
   "keywords": [],
