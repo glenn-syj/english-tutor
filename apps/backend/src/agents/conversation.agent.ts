@@ -5,6 +5,7 @@ import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
+import { StringOutputParser } from '@langchain/core/output_parsers';
 
 @Injectable()
 export class ConversationAgent extends AbstractLlmAgent {
@@ -73,13 +74,24 @@ Your purpose is to conduct a realistic and effective mock speaking test.
   }
 
   protected async callLLM(preparedData: any): Promise<any> {
-    const chain = preparedData.prompt.pipe(this.llm);
+    const chain = preparedData.prompt
+      .pipe(this.llm)
+      .pipe(new StringOutputParser());
     return chain.invoke(preparedData.context);
   }
 
-  protected async processResponse(llmResponse: any): Promise<any> {
-    // ConversationAgent의 경우 특별한 후처리가 필요 없으므로
-    // 응답을 그대로 반환
-    return llmResponse;
+  protected async processResponse(llmResponse: any): Promise<string> {
+    // LLM 응답이 이미 문자열인지 확인
+    if (typeof llmResponse === 'string') {
+      return llmResponse;
+    }
+
+    // AIMessage 객체인 경우 content를 추출
+    if (llmResponse?.content) {
+      return llmResponse.content;
+    }
+
+    // 기타 경우 JSON 문자열로 변환
+    return JSON.stringify(llmResponse);
   }
 }
