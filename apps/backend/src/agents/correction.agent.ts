@@ -41,6 +41,7 @@ const correctionSchema = z.object({
 @Injectable()
 export class CorrectionAgent extends AbstractLlmAgent {
   private parser = StructuredOutputParser.fromZodSchema(correctionSchema);
+  private context: { message: string };
 
   constructor(configService: ConfigService) {
     super(
@@ -56,6 +57,7 @@ export class CorrectionAgent extends AbstractLlmAgent {
   }
 
   protected async prepareChain(context: { message: string }): Promise<any> {
+    this.context = context;
     const prompt = ChatPromptTemplate.fromMessages([
       [
         'system',
@@ -114,7 +116,7 @@ Your response MUST be a single, valid, and complete JSON object that strictly fo
       // or re-invoke the call. For now, we return a failure state.
       return {
         has_suggestion: true,
-        original: 'N/A',
+        original: this.context.message,
         corrected: "Sorry, I couldn't process the response.",
         explanation:
           'There was an issue parsing the feedback from the AI. This is a system error.',
@@ -126,16 +128,17 @@ Your response MUST be a single, valid, and complete JSON object that strictly fo
   private formatResult(result: z.infer<typeof correctionSchema>): Correction {
     if (result.is_proficient || result.correction_type === 'Proficient') {
       this.logger.log('No errors found.');
-      return {
+      const response: Correction = {
         has_suggestion: false,
         feedback: result.explanation,
       };
+      this.logger.log('Returning correction response:', response);
+      return response;
     } else {
       this.logger.log(`Found improvement of type: ${result.correction_type}.`);
-
-      return {
+      const response: Correction = {
         has_suggestion: true,
-        original: result.original,
+        original: result.original || this.context.message,
         corrected: result.corrected,
         explanation: result.explanation,
         correction_type: result.correction_type as
@@ -145,6 +148,8 @@ Your response MUST be a single, valid, and complete JSON object that strictly fo
           | 'Cohesion',
         alternatives: result.alternatives,
       };
+      this.logger.log('Returning correction response:', response);
+      return response;
     }
   }
 }

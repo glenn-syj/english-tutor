@@ -132,7 +132,7 @@ export class OrchestratorService {
     newsAnalysis: any,
   ): Promise<[Correction | null, AsyncIterable<string>]> {
     // 1. Run correction first and wait for the result.
-    const correction = await this.correctionAgent.run(message);
+    const correction = await this.correctionAgent.run({ message });
 
     // 2. Decide which message to use for the conversation context.
     // Use the corrected message if available, otherwise use the original.
