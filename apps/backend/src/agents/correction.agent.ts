@@ -38,8 +38,18 @@ const correctionSchema = z.object({
     ),
 });
 
+type CorrectionAgentContext = { message: string };
+type CorrectionAgentCallOutput = {
+  llmResponse: string;
+  originalMessage: string;
+};
+
 @Injectable()
-export class CorrectionAgent extends AbstractLlmAgent {
+export class CorrectionAgent extends AbstractLlmAgent<
+  CorrectionAgentContext,
+  CorrectionAgentCallOutput,
+  Correction
+> {
   private parser = StructuredOutputParser.fromZodSchema(correctionSchema);
 
   constructor(configService: ConfigService) {
@@ -55,7 +65,7 @@ export class CorrectionAgent extends AbstractLlmAgent {
     );
   }
 
-  protected async prepareChain(context: { message: string }): Promise<any> {
+  protected async prepareChain(context: CorrectionAgentContext): Promise<any> {
     const { message } = context;
     const prompt = ChatPromptTemplate.fromMessages([
       [
@@ -93,7 +103,9 @@ Your response MUST be a single, valid, and complete JSON object that strictly fo
     };
   }
 
-  protected async callLLM(preparedData: any): Promise<any> {
+  protected async callLLM(
+    preparedData: any,
+  ): Promise<CorrectionAgentCallOutput> {
     const chain = preparedData.prompt
       .pipe(this.llm)
       .pipe(new StringOutputParser());
@@ -101,10 +113,9 @@ Your response MUST be a single, valid, and complete JSON object that strictly fo
     return { llmResponse, originalMessage: preparedData.originalMessage };
   }
 
-  protected async processResponse(result: {
-    llmResponse: string;
-    originalMessage: string;
-  }): Promise<Correction> {
+  protected async processResponse(
+    result: CorrectionAgentCallOutput,
+  ): Promise<Correction> {
     const { llmResponse, originalMessage } = result;
     this.logger.log(`Received raw response from LLM.`);
     try {

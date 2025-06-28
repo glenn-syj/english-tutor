@@ -8,7 +8,7 @@ import {
 import { StringOutputParser } from '@langchain/core/output_parsers';
 
 @Injectable()
-export class ConversationAgent extends AbstractLlmAgent {
+export class ConversationAgent extends AbstractLlmAgent<any, string, string> {
   constructor(configService: ConfigService) {
     super(
       configService,
