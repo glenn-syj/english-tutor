@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AbstractAgent } from './agent.abstract';
+import { AbstractLlmAgent } from './agent.llm.abstract';
 import { Correction } from '../../../types/src';
 import { z } from 'zod';
 import { StructuredOutputParser } from 'langchain/output_parsers';
-import { PromptTemplate } from '@langchain/core/prompts';
-
+import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 
 // New, more detailed schema for comprehensive feedback
@@ -40,23 +39,27 @@ const correctionSchema = z.object({
 });
 
 @Injectable()
-export class CorrectionAgent extends AbstractAgent {
+export class CorrectionAgent extends AbstractLlmAgent {
   private parser = StructuredOutputParser.fromZodSchema(correctionSchema);
 
   constructor(configService: ConfigService) {
     super(
       configService,
       'Correction Agent',
-      "Analyzes the user's last message for grammatical errors, nuance, and style.",
+      'Corrects grammar and suggests improvements for user messages.',
+      {
+        temperature: 0.1, // 문법 교정은 매우 결정적이어야 함
+        topP: 0.1,
+        topK: 10,
+      },
     );
   }
 
-  async run(userMessage: string): Promise<Correction> {
-    console.log('--- CorrectionAgent Start ---');
-    console.log(`[CorrectionAgent] Received message: "${userMessage}"`);
-
-    const prompt = PromptTemplate.fromTemplate(
-      `You are an expert English language examiner, specializing in speaking tests like IELTS and OPIC. Your goal is to provide feedback that helps the user achieve a higher score.
+  protected async prepareChain(context: { message: string }): Promise<any> {
+    const prompt = ChatPromptTemplate.fromMessages([
+      [
+        'system',
+        `You are an expert English language examiner, specializing in speaking tests like IELTS or OPIC. Your goal is to provide feedback that helps the user achieve a higher score.
 
 Analyze the user's message based on key scoring criteria:
 - **Grammatical Range and Accuracy**: Are there errors? Is there a variety of complex structures?
@@ -64,7 +67,7 @@ Analyze the user's message based on key scoring criteria:
 - **Coherence**: Do the ideas link together logically? Are cohesive devices (e.g., 'however', 'therefore', 'in addition') used effectively?
 - **Clarity**: Is the message easy to understand? Could it be more direct or better structured?
 
-User's message: "{user_message}"
+User's message: "{message}"
 
 Based on this, provide structured feedback.
 - If the sentence is already "proficient" (grammatically perfect, good vocabulary, well-structured), set "is_proficient" to true and provide encouraging feedback in the "explanation" field, highlighting what they did well.
@@ -75,47 +78,60 @@ Based on this, provide structured feedback.
 
 Your response MUST be a single, valid, and complete JSON object that strictly follows the format instructions below. Do not add any text or formatting like markdown code blocks before or after the JSON object.
 {format_instructions}`,
-    );
+      ],
+      ['human', '{message}'],
+    ]);
 
-    const chain = prompt.pipe(this.llm).pipe(new StringOutputParser());
-    const llmOutput = await chain.invoke({
-      user_message: userMessage,
-      format_instructions: this.parser.getFormatInstructions(),
-    });
+    return {
+      prompt,
+      context: {
+        message: context.message,
+        format_instructions: this.parser.getFormatInstructions(),
+      },
+    };
+  }
 
+  protected async callLLM(preparedData: any): Promise<string> {
+    const chain = preparedData.prompt
+      .pipe(this.llm)
+      .pipe(new StringOutputParser());
+    return chain.invoke(preparedData.context);
+  }
+
+  protected async processResponse(llmResponse: string): Promise<Correction> {
+    this.logger.log(`Received raw response from LLM.`);
     try {
-      // Clean the output from markdown code blocks
-      const cleanedOutput = llmOutput.replace(/```json\n|```/g, '').trim();
+      // Clean the output from markdown code blocks and parse
+      const cleanedOutput = llmResponse.replace(/```json\n|```/g, '').trim();
       const result = await this.parser.parse(cleanedOutput);
       return this.formatResult(result);
     } catch (e) {
-      console.error('[CorrectionAgent] Initial parsing failed. Retrying...', e);
-      // Re-invoke the chain with a retry mechanism built-in
-      const retryChain = prompt.pipe(this.llm).pipe(this.parser).withRetry({
-        stopAfterAttempt: 2,
-      });
-
-      const result = await retryChain.invoke({
-        user_message: userMessage,
-        format_instructions: this.parser.getFormatInstructions(),
-      });
-      return this.formatResult(result);
+      this.logger.error(
+        `[${this.name}] Parsing failed on the first attempt.`,
+        e.stack,
+      );
+      // NOTE: A more robust implementation could use an OutputFixingParser here
+      // or re-invoke the call. For now, we return a failure state.
+      return {
+        has_suggestion: true,
+        original: 'N/A',
+        corrected: "Sorry, I couldn't process the response.",
+        explanation:
+          'There was an issue parsing the feedback from the AI. This is a system error.',
+        correction_type: 'Clarity',
+      };
     }
   }
 
   private formatResult(result: z.infer<typeof correctionSchema>): Correction {
     if (result.is_proficient || result.correction_type === 'Proficient') {
-      console.log('[CorrectionAgent] No errors found.');
-      console.log('--- CorrectionAgent End ---');
+      this.logger.log('No errors found.');
       return {
         has_suggestion: false,
         feedback: result.explanation,
       };
     } else {
-      console.log(
-        `[CorrectionAgent] Found improvement of type: ${result.correction_type}.`,
-      );
-      console.log('--- CorrectionAgent End ---');
+      this.logger.log(`Found improvement of type: ${result.correction_type}.`);
 
       return {
         has_suggestion: true,
