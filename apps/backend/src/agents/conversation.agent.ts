@@ -1,13 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SystemMessage } from '@langchain/core/messages';
 import { AbstractAgent } from './agent.abstract';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
 import { Runnable } from '@langchain/core/runnables';
-import { UserProfile, NewsAnalysis, Correction } from '../../../types/src';
 
 @Injectable()
 export class ConversationAgent extends AbstractAgent {
@@ -16,11 +14,16 @@ export class ConversationAgent extends AbstractAgent {
       configService,
       'Conversation Agent',
       'Engages in a conversation with the user.',
+      {
+        temperature: 0.8,
+        topP: 0.9,
+        topK: 40,
+      },
     );
   }
 
   async run(): Promise<Runnable<any, any>> {
-    console.log('--- ConversationAgent Start ---');
+    this.logger.log(`[${this.name}] Preparing conversation chain...`);
 
     const prompt = ChatPromptTemplate.fromMessages([
       [
@@ -60,8 +63,7 @@ Your purpose is to conduct a realistic and effective mock speaking test.
       ['human', '{user_message}'],
     ]);
 
-    console.log('[ConversationAgent] Returning chain.');
-    console.log('--- ConversationAgent End ---');
+    this.logger.log(`[${this.name}] Conversation chain prepared.`);
     return prompt.pipe(this.llm);
   }
 }

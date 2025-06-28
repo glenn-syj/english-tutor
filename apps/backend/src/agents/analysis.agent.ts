@@ -7,7 +7,7 @@ import {
   StructuredOutputParser,
 } from 'langchain/output_parsers';
 import { AbstractAgent } from './agent.abstract';
-import { NewsAnalysis, NewsArticle, UserProfile } from '../../../types/src';
+import { NewsAnalysis, NewsArticle } from '../../../types/src';
 import {
   ChatGoogleGenerativeAI,
   GoogleGenerativeAIEmbeddings,
@@ -55,7 +55,7 @@ export class AnalysisAgent extends AbstractAgent {
     this.llm = new ChatGoogleGenerativeAI({
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
       model: 'gemini-2.0-flash',
-      temperature: 0.7,
+      temperature: 0.2,
     });
     this.embeddings = new GoogleGenerativeAIEmbeddings({
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
