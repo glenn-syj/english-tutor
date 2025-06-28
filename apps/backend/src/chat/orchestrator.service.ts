@@ -14,8 +14,6 @@ import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { Correction } from '../../../types/src';
 
 const ARTICLE_SYSTEM_MESSAGE_PREFIX = 'SYSTEM_ARTICLE:';
-const ARTICLE_STREAM_PREFIX = 'SYSTEM_MESSAGE::';
-const CORRECTION_STREAM_PREFIX = 'CORRECTION_MESSAGE::';
 
 const convertToLangChainMessages = (messages: ChatMessage[]): BaseMessage[] => {
   return messages

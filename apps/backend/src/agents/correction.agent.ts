@@ -5,11 +5,7 @@ import { Correction } from '../../../types/src';
 import { z } from 'zod';
 import { StructuredOutputParser } from 'langchain/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
-import {
-  ChatPromptTemplate,
-  MessagesPlaceholder,
-} from '@langchain/core/prompts';
-import { Runnable } from '@langchain/core/runnables';
+
 import { StringOutputParser } from '@langchain/core/output_parsers';
 
 // New, more detailed schema for comprehensive feedback
