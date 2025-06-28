@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   AnalysisAgent,
   ConversationAgent,
@@ -7,8 +7,6 @@ import {
 } from '../agents';
 import { ProfileService } from '../profile/profile.service';
 import { ChatMessage, NewsAnalysis } from '../../../types/src';
-import { StringOutputParser } from '@langchain/core/output_parsers';
-import { Runnable } from '@langchain/core/runnables';
 import { Readable } from 'stream';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { Correction } from '../../../types/src';
@@ -30,6 +28,8 @@ const convertToLangChainMessages = (messages: ChatMessage[]): BaseMessage[] => {
 
 @Injectable()
 export class OrchestratorService {
+  private readonly logger = new Logger(OrchestratorService.name);
+
   constructor(
     private readonly newsAgent: NewsAgent,
     private readonly analysisAgent: AnalysisAgent,
@@ -47,9 +47,9 @@ export class OrchestratorService {
     history: ChatMessage[],
     message: string,
   ): AsyncGenerator<string, void, unknown> {
-    console.log('--- Orchestrator Start ---');
-    console.log(`[Orchestrator] Received message: "${message}"`);
-    console.log(`[Orchestrator] Received history length: ${history.length}`);
+    this.logger.log('--- Orchestrator Start ---');
+    this.logger.log(`Received message: "${message}"`);
+    this.logger.log(`Received history length: ${history.length}`);
 
     const userProfile = await this.profileService.getProfile();
 
@@ -68,15 +68,15 @@ export class OrchestratorService {
     };
 
     if (articleSystemMessage) {
-      console.log('[Orchestrator] Existing article found in history.');
+      this.logger.log('Existing article found in history.');
       const articleJson = articleSystemMessage.text.substring(
         ARTICLE_SYSTEM_MESSAGE_PREFIX.length,
       );
       newsAnalysis = JSON.parse(articleJson);
       fullHistory.push(newChatMessage);
     } else {
-      console.log(
-        '[Orchestrator] No article in history. Fetching new one based on the user message.',
+      this.logger.log(
+        'No article in history. Fetching new one based on the user message.',
       );
       const newsArticle = await this.newsAgent.run(message);
       newsAnalysis = await this.analysisAgent.run(newsArticle);
@@ -96,9 +96,7 @@ export class OrchestratorService {
         payload: newArticleSystemMessage,
       };
       yield JSON.stringify(systemMessagePayload) + '\n';
-      console.log(
-        '[Orchestrator] Yielding new article system message to stream.',
-      );
+      this.logger.log('Yielding new article system message to stream.');
     }
 
     const [correction, conversationStream] =
@@ -113,7 +111,7 @@ export class OrchestratorService {
       // Stream Type 2: Correction
       const correctionPayload = { type: 'correction', payload: correction };
       yield JSON.stringify(correctionPayload) + '\n';
-      console.log('[Orchestrator] Yielding correction message to stream.');
+      this.logger.log('Yielding correction message to stream.');
     }
 
     // Stream Type 3: AI response chunk
@@ -124,7 +122,7 @@ export class OrchestratorService {
 
     // Stream Type 4: End of stream
     yield JSON.stringify({ type: 'end' }) + '\n';
-    console.log('--- Orchestrator End ---');
+    this.logger.log('--- Orchestrator End ---');
   }
 
   private async runCorrectionAndConversation(
@@ -144,19 +142,22 @@ export class OrchestratorService {
         : message;
 
     // 3. Run conversation agent with the chosen message.
-    const chain = (await this.conversationAgent.run()) as Runnable<any, any>;
     const langChainHistory = convertToLangChainMessages(history);
+    const context = {
+      user_name: userProfile.name,
+      user_profile: JSON.stringify(userProfile),
+      user_interests: userProfile.interests.join(', '),
+      news_analysis: JSON.stringify(newsAnalysis),
+      chat_history: langChainHistory,
+      user_message: messageForConversation,
+    };
 
-    const conversationStream = await chain
-      .pipe(new StringOutputParser())
-      .stream({
-        user_name: userProfile.name,
-        user_profile: JSON.stringify(userProfile),
-        user_interests: userProfile.interests.join(', '),
-        news_analysis: JSON.stringify(newsAnalysis),
-        chat_history: langChainHistory,
-        user_message: messageForConversation,
-      });
+    const response = await this.conversationAgent.execute(context);
+
+    // Convert the response into an async iterable of chunks
+    const conversationStream = (async function* () {
+      yield response;
+    })();
 
     return [correction.has_suggestion ? correction : null, conversationStream];
   }
