@@ -114,7 +114,7 @@ describe('OrchestratorService', () => {
         userProfile: mockUserProfile,
       });
       expect(correctionAgent.run).toHaveBeenCalledWith({ message });
-      expect(conversationAgent.execute).toHaveBeenCalled();
+      expect(conversationAgent.run).toHaveBeenCalled();
 
       // 2. Verify stream content
       expect(results.find((r) => r.type === 'system-article')).toBeDefined();
@@ -150,7 +150,7 @@ describe('OrchestratorService', () => {
       // Verify other agents were still called
       expect(profileService.getProfile).toHaveBeenCalledTimes(1);
       expect(correctionAgent.run).toHaveBeenCalledWith({ message });
-      expect(conversationAgent.execute).toHaveBeenCalled();
+      expect(conversationAgent.run).toHaveBeenCalled();
     });
   });
 
@@ -173,7 +173,7 @@ describe('OrchestratorService', () => {
       // Verify other agents were still called
       expect(profileService.getProfile).toHaveBeenCalledTimes(1);
       expect(correctionAgent.run).toHaveBeenCalledWith({ message });
-      expect(conversationAgent.execute).toHaveBeenCalled();
+      expect(conversationAgent.run).toHaveBeenCalled();
 
       // Verify stream does not contain system-article but still completes
       expect(results.find((r) => r.type === 'system-article')).toBeUndefined();
