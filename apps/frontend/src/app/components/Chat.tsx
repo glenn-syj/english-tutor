@@ -102,13 +102,23 @@ export function Chat() {
                 setMessages((prev) => [...prev, payload]);
                 break;
               case "correction":
+                console.log("Received correction payload:", payload);
                 setMessages((prev) => {
                   const lastMessage = prev[prev.length - 1];
+                  console.log(
+                    "Last message when correction received:",
+                    lastMessage
+                  );
                   if (lastMessage?.sender === "user") {
-                    return [
-                      ...prev.slice(0, -1),
-                      { ...lastMessage, correction: payload },
-                    ];
+                    const updatedMessage = {
+                      ...lastMessage,
+                      correction: payload,
+                    };
+                    console.log(
+                      "Updated message with correction:",
+                      updatedMessage
+                    );
+                    return [...prev.slice(0, -1), updatedMessage];
                   }
                   return prev;
                 });
@@ -138,12 +148,13 @@ export function Chat() {
                 });
                 break;
               case "end":
-                if (
-                  currentAssistantMessage.trim() &&
-                  assistantMessageTimestamp
-                ) {
-                  speak(currentAssistantMessage);
-                  setCurrentlyPlayingId(assistantMessageTimestamp);
+                if (currentAssistantMessage.trim()) {
+                  setTimeout(() => {
+                    speak(currentAssistantMessage);
+                    setCurrentlyPlayingId(
+                      assistantMessageTimestamp || new Date().toISOString()
+                    );
+                  }, 100);
                 }
                 break;
               default:
