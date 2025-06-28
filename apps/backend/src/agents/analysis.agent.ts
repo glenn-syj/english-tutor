@@ -9,7 +9,6 @@ import {
 import { AbstractLlmAgent } from './agent.llm.abstract';
 import { NewsAnalysis, NewsArticle, UserProfile } from '../../../types/src';
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
-import { ProfileService } from '../profile/profile.service';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 
 // This schema defines the structure of the analysis result.
@@ -35,16 +34,22 @@ const analysisSchema = z.object({
     ),
 });
 
+type AnalysisAgentContext = {
+  article: NewsArticle;
+  userProfile: UserProfile;
+};
+
 @Injectable()
-export class AnalysisAgent extends AbstractLlmAgent {
+export class AnalysisAgent extends AbstractLlmAgent<
+  AnalysisAgentContext,
+  string,
+  NewsAnalysis
+> {
   protected embeddings: GoogleGenerativeAIEmbeddings;
   private parser = StructuredOutputParser.fromZodSchema(analysisSchema);
   private outputFixingParser: OutputFixingParser<any>;
 
-  constructor(
-    configService: ConfigService,
-    private readonly profileService: ProfileService,
-  ) {
+  constructor(configService: ConfigService) {
     super(
       configService,
       'Analysis Agent',
@@ -62,10 +67,7 @@ export class AnalysisAgent extends AbstractLlmAgent {
     this.outputFixingParser = OutputFixingParser.fromLLM(this.llm, this.parser);
   }
 
-  protected async prepareChain(context: {
-    article: NewsArticle;
-    userProfile: UserProfile;
-  }): Promise<any> {
+  protected async prepareChain(context: AnalysisAgentContext): Promise<any> {
     const { article, userProfile } = context;
 
     const prompt = ChatPromptTemplate.fromMessages([
