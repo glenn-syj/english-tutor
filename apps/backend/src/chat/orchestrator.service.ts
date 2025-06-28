@@ -59,21 +59,42 @@ export class OrchestratorService {
     const [userProfile, { newsAnalysis, newArticleSystemMessage }] =
       await Promise.all([userProfilePromise, articleHandlingPromise]);
 
-    const fullHistory: ChatMessage[] = [...history];
     const newChatMessage: ChatMessage = {
       sender: 'user',
       text: message,
       timestamp: new Date().toISOString(),
     };
+    const fullHistory: ChatMessage[] = newArticleSystemMessage
+      ? [...history, newArticleSystemMessage, newChatMessage]
+      : [...history, newChatMessage];
 
-    if (newArticleSystemMessage) {
-      fullHistory.push(newArticleSystemMessage, newChatMessage);
-    } else {
-      fullHistory.push(newChatMessage);
-    }
+    // 3. Generate and yield from the response stream
+    yield* this._generateResponseStream({
+      newArticleSystemMessage,
+      message,
+      fullHistory,
+      userProfile,
+      newsAnalysis,
+    });
 
+    this.logger.log('--- Orchestrator End ---');
+  }
+
+  private async *_generateResponseStream({
+    newArticleSystemMessage,
+    message,
+    fullHistory,
+    userProfile,
+    newsAnalysis,
+  }: {
+    newArticleSystemMessage: ChatMessage | null;
+    message: string;
+    fullHistory: ChatMessage[];
+    userProfile: any;
+    newsAnalysis: NewsAnalysis;
+  }): AsyncGenerator<string, void, unknown> {
+    // Yield system article if it's new
     if (newArticleSystemMessage) {
-      // Stream Type 1: System Article
       const systemMessagePayload = {
         type: 'system-article',
         payload: newArticleSystemMessage,
@@ -82,6 +103,7 @@ export class OrchestratorService {
       this.logger.log('Yielding new article system message to stream.');
     }
 
+    // Run correction and conversation
     const [correction, conversationStream] =
       await this.runCorrectionAndConversation(
         message,
@@ -90,22 +112,21 @@ export class OrchestratorService {
         newsAnalysis,
       );
 
+    // Yield correction
     if (correction) {
-      // Stream Type 2: Correction
       const correctionPayload = { type: 'correction', payload: correction };
       yield JSON.stringify(correctionPayload) + '\n';
       this.logger.log('Yielding correction message to stream.');
     }
 
-    // Stream Type 3: AI response chunk
+    // Yield conversation chunks
     for await (const chunk of conversationStream) {
       const chunkPayload = { type: 'chunk', payload: chunk };
       yield JSON.stringify(chunkPayload) + '\n';
     }
 
-    // Stream Type 4: End of stream
+    // Yield end of stream
     yield JSON.stringify({ type: 'end' }) + '\n';
-    this.logger.log('--- Orchestrator End ---');
   }
 
   private async _handleArticle(
