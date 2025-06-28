@@ -2,7 +2,11 @@ import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ConfigService } from '@nestjs/config';
 import { AbstractGeneralAgent } from './agent.general.abstract';
 
-export abstract class AbstractLlmAgent extends AbstractGeneralAgent {
+export abstract class AbstractLlmAgent<
+  TContext = any,
+  TCallOutput = any,
+  TResult = any,
+> extends AbstractGeneralAgent {
   protected llm: ChatGoogleGenerativeAI;
 
   constructor(
@@ -31,25 +35,27 @@ export abstract class AbstractLlmAgent extends AbstractGeneralAgent {
    * Prepare the input data and chain for the LLM call
    * This method should handle any preprocessing of the input data
    */
-  protected abstract prepareChain(context: any): Promise<any>;
+  protected abstract prepareChain(context: TContext): Promise<any>;
 
   /**
    * Make the actual API call to the LLM
    * This is where the core interaction with the model happens
    */
-  protected abstract callLLM(preparedData: any): Promise<any>;
+  protected abstract callLLM(preparedData: any): Promise<TCallOutput>;
 
   /**
    * Process the LLM's response
    * This method should handle any postprocessing of the LLM's output
    */
-  protected abstract processResponse(llmResponse: any): Promise<any>;
+  protected abstract processResponse(
+    llmResponse: TCallOutput,
+  ): Promise<TResult>;
 
   /**
    * The main run method that orchestrates the entire process
    * This implementation provides detailed timing for each step
    */
-  async run(context: any): Promise<any> {
+  async run(context: TContext): Promise<TResult> {
     const startTime = Date.now();
     this.logger.log(`[${this.name}] Starting agent execution...`);
 
