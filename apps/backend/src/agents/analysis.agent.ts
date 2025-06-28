@@ -8,10 +8,7 @@ import {
 } from 'langchain/output_parsers';
 import { AbstractLlmAgent } from './agent.llm.abstract';
 import { NewsAnalysis, NewsArticle, UserProfile } from '../../../types/src';
-import {
-  ChatGoogleGenerativeAI,
-  GoogleGenerativeAIEmbeddings,
-} from '@langchain/google-genai';
+import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { ProfileService } from '../profile/profile.service';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 
@@ -43,7 +40,6 @@ export class AnalysisAgent extends AbstractLlmAgent {
   protected embeddings: GoogleGenerativeAIEmbeddings;
   private parser = StructuredOutputParser.fromZodSchema(analysisSchema);
   private outputFixingParser: OutputFixingParser<any>;
-  private userProfile: UserProfile;
 
   constructor(
     configService: ConfigService,
@@ -59,11 +55,6 @@ export class AnalysisAgent extends AbstractLlmAgent {
         topK: 20,
       },
     );
-    this.llm = new ChatGoogleGenerativeAI({
-      apiKey: this.configService.get<string>('GEMINI_API_KEY'),
-      model: 'gemini-2.0-flash',
-      temperature: 0.2,
-    });
     this.embeddings = new GoogleGenerativeAIEmbeddings({
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
       model: 'embedding-001',
@@ -72,9 +63,11 @@ export class AnalysisAgent extends AbstractLlmAgent {
   }
 
   protected async prepareChain(context: {
-    article: string;
-    learningLevel: string;
+    article: NewsArticle;
+    userProfile: UserProfile;
   }): Promise<any> {
+    const { article, userProfile } = context;
+
     const prompt = ChatPromptTemplate.fromMessages([
       [
         'system',
@@ -104,8 +97,8 @@ Your output MUST strictly adhere to the JSON format described below.
     return {
       prompt,
       context: {
-        article: context.article,
-        learningLevel: context.learningLevel,
+        article: JSON.stringify(article),
+        learningLevel: userProfile.learningLevel,
         format_instructions: this.parser.getFormatInstructions(),
       },
     };
@@ -122,14 +115,20 @@ Your output MUST strictly adhere to the JSON format described below.
     this.logger.log(`Received raw response from LLM.`);
     try {
       const cleanedOutput = llmResponse.replace(/```json\n|```/g, '').trim();
-      return (await this.parser.parse(cleanedOutput)) as NewsAnalysis;
+      const parsed = (await this.parser.parse(cleanedOutput)) as NewsAnalysis;
+      this.logger.log(
+        `Successfully parsed. Summary: ${parsed.summary.substring(0, 50)}...`,
+      );
+      return parsed;
     } catch (e) {
       this.logger.error(
         `[${this.name}] Parsing failed on the first attempt. Retrying with OutputFixingParser...`,
         e.stack,
       );
       try {
-        return await this.outputFixingParser.parse(llmResponse);
+        const fixed = await this.outputFixingParser.parse(llmResponse);
+        this.logger.log(`Successfully parsed with OutputFixingParser.`);
+        return fixed;
       } catch (finalError) {
         this.logger.error(
           `[${this.name}] OutputFixingParser also failed. Returning fallback analysis.`,
@@ -143,30 +142,5 @@ Your output MUST strictly adhere to the JSON format described below.
         };
       }
     }
-  }
-
-  async run(context: {
-    article: NewsArticle;
-    userProfile: UserProfile;
-  }): Promise<NewsAnalysis> {
-    const { article, userProfile } = context;
-    this.logger.log('--- AnalysisAgent Start ---');
-    this.logger.log(`Received article: "${article.title}"`);
-
-    const chainData = await this.prepareChain({
-      article: JSON.stringify(article),
-      learningLevel: userProfile.learningLevel,
-    });
-    const rawResult = await this.callLLM(chainData);
-    const result = await this.processResponse(rawResult);
-
-    this.logger.log(
-      `Successfully analyzed article. Summary: ${result.summary.substring(
-        0,
-        50,
-      )}...`,
-    );
-    this.logger.log('--- AnalysisAgent End ---');
-    return result;
   }
 }
