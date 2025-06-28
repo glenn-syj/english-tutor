@@ -91,7 +91,7 @@ export class OrchestratorService {
     message: string;
     fullHistory: ChatMessage[];
     userProfile: any;
-    newsAnalysis: NewsAnalysis;
+    newsAnalysis: NewsAnalysis | null;
   }): AsyncGenerator<string, void, unknown> {
     // Yield system article if it's new
     if (newArticleSystemMessage) {
@@ -133,7 +133,7 @@ export class OrchestratorService {
     history: ChatMessage[],
     message: string,
   ): Promise<{
-    newsAnalysis: NewsAnalysis;
+    newsAnalysis: NewsAnalysis | null;
     newArticleSystemMessage: ChatMessage | null;
   }> {
     const articleSystemMessage = history.find((msg) =>
@@ -149,25 +149,33 @@ export class OrchestratorService {
       return { newsAnalysis, newArticleSystemMessage: null };
     }
 
-    this.logger.log(
-      'No article in history. Fetching new one based on the user message.',
-    );
-    const newsArticle = await this.newsAgent.run(message);
-    const newsAnalysis = await this.analysisAgent.run(newsArticle);
+    try {
+      this.logger.log(
+        'No article in history. Fetching new one based on the user message.',
+      );
+      const newsArticle = await this.newsAgent.run(message);
+      const newsAnalysis = await this.analysisAgent.run(newsArticle);
 
-    const newArticleSystemMessage: ChatMessage = {
-      sender: 'system',
-      text: `${ARTICLE_SYSTEM_MESSAGE_PREFIX}${JSON.stringify(newsAnalysis)}`,
-      timestamp: new Date().toISOString(),
-    };
-    return { newsAnalysis, newArticleSystemMessage };
+      const newArticleSystemMessage: ChatMessage = {
+        sender: 'system',
+        text: `${ARTICLE_SYSTEM_MESSAGE_PREFIX}${JSON.stringify(newsAnalysis)}`,
+        timestamp: new Date().toISOString(),
+      };
+      return { newsAnalysis, newArticleSystemMessage };
+    } catch (error) {
+      this.logger.error(
+        'Failed to fetch or analyze news article.',
+        error.stack,
+      );
+      return { newsAnalysis: null, newArticleSystemMessage: null };
+    }
   }
 
   private async runCorrectionAndConversation(
     message: string,
     history: ChatMessage[],
     userProfile: any,
-    newsAnalysis: any,
+    newsAnalysis: NewsAnalysis | null,
   ): Promise<[Correction | null, AsyncIterable<string>]> {
     // 1. Run correction first and wait for the result.
     const correction = await this.correctionAgent.run({ message });
@@ -185,7 +193,9 @@ export class OrchestratorService {
       user_name: userProfile.name,
       user_profile: JSON.stringify(userProfile),
       user_interests: userProfile.interests.join(', '),
-      news_analysis: JSON.stringify(newsAnalysis),
+      news_analysis: newsAnalysis
+        ? JSON.stringify(newsAnalysis)
+        : 'No news article is being discussed in this conversation.',
       chat_history: langChainHistory,
       user_message: messageForConversation,
     };
