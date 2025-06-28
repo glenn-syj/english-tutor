@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { AbstractAgent } from './agent.abstract';
+import { AbstractGeneralAgent } from './agent.general.abstract';
 import { TavilySearchResults } from '@langchain/community/tools/tavily_search';
 import { NewsArticle } from '../../../types/src';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class NewsAgent extends AbstractAgent {
+export class NewsAgent extends AbstractGeneralAgent {
   private searchTool: TavilySearchResults;
 
   constructor(configService: ConfigService) {
@@ -23,7 +23,7 @@ export class NewsAgent extends AbstractAgent {
   async run(message: string): Promise<NewsArticle> {
     const query = `${message}`;
 
-    console.log(`[NewsAgent] Performing search with query: "${query}"`);
+    this.logger.log(`Performing search with query: "${query}"`);
     const searchResultString = await this.searchTool.invoke(query);
 
     if (!searchResultString) {
