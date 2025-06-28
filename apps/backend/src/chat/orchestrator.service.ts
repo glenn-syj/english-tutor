@@ -6,10 +6,14 @@ import {
   NewsAgent,
 } from '../agents';
 import { ProfileService } from '../profile/profile.service';
-import { ChatMessage, NewsAnalysis } from '../../../types/src';
+import {
+  ChatMessage,
+  NewsAnalysis,
+  Correction,
+  UserProfile,
+} from '../../../types/src';
 import { Readable } from 'stream';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
-import { Correction } from '../../../types/src';
 
 const ARTICLE_SYSTEM_MESSAGE_PREFIX = 'SYSTEM_ARTICLE:';
 
@@ -51,13 +55,19 @@ export class OrchestratorService {
     this.logger.log(`Received message: "${message}"`);
     this.logger.log(`Received history length: ${history.length}`);
 
-    // Start independent tasks in parallel
+    // 1. Start independent tasks in parallel
     const userProfilePromise = this.profileService.getProfile();
-    const articleHandlingPromise = this._handleArticle(history, message);
 
-    // Await results
-    const [userProfile, { newsAnalysis, newArticleSystemMessage }] =
-      await Promise.all([userProfilePromise, articleHandlingPromise]);
+    // To call _handleArticle, we need the user profile first.
+    // So, we await it here.
+    const userProfile = await userProfilePromise;
+
+    // 2. Handle article context using the user profile
+    const { newsAnalysis, newArticleSystemMessage } = await this._handleArticle(
+      history,
+      message,
+      userProfile,
+    );
 
     const newChatMessage: ChatMessage = {
       sender: 'user',
@@ -90,7 +100,7 @@ export class OrchestratorService {
     newArticleSystemMessage: ChatMessage | null;
     message: string;
     fullHistory: ChatMessage[];
-    userProfile: any;
+    userProfile: UserProfile;
     newsAnalysis: NewsAnalysis | null;
   }): AsyncGenerator<string, void, unknown> {
     // Yield system article if it's new
@@ -132,6 +142,7 @@ export class OrchestratorService {
   private async _handleArticle(
     history: ChatMessage[],
     message: string,
+    userProfile: UserProfile,
   ): Promise<{
     newsAnalysis: NewsAnalysis | null;
     newArticleSystemMessage: ChatMessage | null;
@@ -154,7 +165,10 @@ export class OrchestratorService {
         'No article in history. Fetching new one based on the user message.',
       );
       const newsArticle = await this.newsAgent.run(message);
-      const newsAnalysis = await this.analysisAgent.run(newsArticle);
+      const newsAnalysis = await this.analysisAgent.run({
+        article: newsArticle,
+        userProfile: userProfile,
+      });
 
       const newArticleSystemMessage: ChatMessage = {
         sender: 'system',
@@ -174,7 +188,7 @@ export class OrchestratorService {
   private async runCorrectionAndConversation(
     message: string,
     history: ChatMessage[],
-    userProfile: any,
+    userProfile: UserProfile,
     newsAnalysis: NewsAnalysis | null,
   ): Promise<[Correction | null, AsyncIterable<string>]> {
     // 1. Run correction first and wait for the result.

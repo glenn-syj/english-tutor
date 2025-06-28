@@ -145,19 +145,14 @@ Your output MUST strictly adhere to the JSON format described below.
     }
   }
 
-  async analyze(article: NewsArticle): Promise<NewsAnalysis> {
-    const userProfile = await this.profileService.getProfile();
-    return this.execute({
-      article: JSON.stringify(article),
-      learningLevel: userProfile.learningLevel,
-    });
-  }
-
-  async run(article: NewsArticle): Promise<NewsAnalysis> {
+  async run(context: {
+    article: NewsArticle;
+    userProfile: UserProfile;
+  }): Promise<NewsAnalysis> {
+    const { article, userProfile } = context;
     this.logger.log('--- AnalysisAgent Start ---');
     this.logger.log(`Received article: "${article.title}"`);
 
-    const userProfile = await this.profileService.getProfile();
     const chainData = await this.prepareChain({
       article: JSON.stringify(article),
       learningLevel: userProfile.learningLevel,
@@ -166,7 +161,10 @@ Your output MUST strictly adhere to the JSON format described below.
     const result = await this.processResponse(rawResult);
 
     this.logger.log(
-      `Successfully analyzed article. Summary: ${result.summary.substring(0, 50)}...`,
+      `Successfully analyzed article. Summary: ${result.summary.substring(
+        0,
+        50,
+      )}...`,
     );
     this.logger.log('--- AnalysisAgent End ---');
     return result;
