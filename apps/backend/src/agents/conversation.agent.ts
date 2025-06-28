@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AbstractAgent } from './agent.abstract';
+import { AbstractLlmAgent } from './agent.llm.abstract';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
-import { Runnable } from '@langchain/core/runnables';
 
 @Injectable()
-export class ConversationAgent extends AbstractAgent {
+export class ConversationAgent extends AbstractLlmAgent {
+  private prompt: ChatPromptTemplate;
+
   constructor(configService: ConfigService) {
     super(
       configService,
@@ -22,10 +23,8 @@ export class ConversationAgent extends AbstractAgent {
     );
   }
 
-  async run(): Promise<Runnable<any, any>> {
-    this.logger.log(`[${this.name}] Preparing conversation chain...`);
-
-    const prompt = ChatPromptTemplate.fromMessages([
+  protected async prepareChain(context: any): Promise<any> {
+    this.prompt = ChatPromptTemplate.fromMessages([
       [
         'system',
         `You are "Alex," a professional and encouraging AI English tutor. Your goal is to simulate a speaking test like IELTS or OPIC, helping the user improve their ability to give structured, detailed, and well-reasoned answers.
@@ -67,7 +66,20 @@ Your purpose is to conduct a realistic and effective mock speaking test.
       ['human', '{user_message}'],
     ]);
 
-    this.logger.log(`[${this.name}] Conversation chain prepared.`);
-    return prompt.pipe(this.llm);
+    return {
+      prompt: this.prompt,
+      context,
+    };
+  }
+
+  protected async callLLM(preparedData: any): Promise<any> {
+    const chain = preparedData.prompt.pipe(this.llm);
+    return chain.invoke(preparedData.context);
+  }
+
+  protected async processResponse(llmResponse: any): Promise<any> {
+    // ConversationAgent의 경우 특별한 후처리가 필요 없으므로
+    // 응답을 그대로 반환
+    return llmResponse;
   }
 }
