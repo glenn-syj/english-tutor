@@ -1,15 +1,12 @@
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from '@nestjs/common';
+import { AbstractGeneralAgent } from './agent.general.abstract';
 
-export abstract class AbstractLlmAgent {
+export abstract class AbstractLlmAgent extends AbstractGeneralAgent {
   protected llm: ChatGoogleGenerativeAI;
-  protected name: string;
-  protected description: string;
-  protected readonly logger = new Logger(AbstractLlmAgent.name);
 
   constructor(
-    protected readonly configService: ConfigService,
+    configService: ConfigService,
     name: string,
     description: string,
     llmSettings?: {
@@ -19,8 +16,7 @@ export abstract class AbstractLlmAgent {
       model?: string;
     },
   ) {
-    this.name = name;
-    this.description = description;
+    super(configService, name, description);
     this.llm = new ChatGoogleGenerativeAI({
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
       model: 'gemini-2.0-flash',
@@ -54,52 +50,46 @@ export abstract class AbstractLlmAgent {
    * This implementation provides detailed timing for each step
    */
   async run(context: any): Promise<any> {
-    // Preparation phase
-    const prepStartTime = Date.now();
-    this.logger.log(`[${this.name}] Preparing chain...`);
-    const preparedData = await this.prepareChain(context);
-    const prepDuration = Date.now() - prepStartTime;
-    this.logger.log(
-      `[${this.name}] Chain preparation completed in ${prepDuration}ms`,
-    );
-
-    // LLM API call phase
-    const apiStartTime = Date.now();
-    this.logger.log(`[${this.name}] Calling LLM API...`);
-    const llmResponse = await this.callLLM(preparedData);
-    const apiDuration = Date.now() - apiStartTime;
-    this.logger.log(
-      `[${this.name}] LLM API call completed in ${apiDuration}ms`,
-    );
-
-    // Response processing phase
-    const processStartTime = Date.now();
-    this.logger.log(`[${this.name}] Processing response...`);
-    const result = await this.processResponse(llmResponse);
-    const processDuration = Date.now() - processStartTime;
-    this.logger.log(
-      `[${this.name}] Response processing completed in ${processDuration}ms`,
-    );
-
-    return result;
-  }
-
-  async execute(context: any): Promise<any> {
     const startTime = Date.now();
-    this.logger.log(`[${this.name}] Executing...`);
+    this.logger.log(`[${this.name}] Starting agent execution...`);
 
     try {
-      const result = await this.run(context);
-      const endTime = Date.now();
-      const duration = endTime - startTime;
+      // Preparation phase
+      const prepStartTime = Date.now();
+      this.logger.log(`[${this.name}] Preparing chain...`);
+      const preparedData = await this.prepareChain(context);
+      const prepDuration = Date.now() - prepStartTime;
+      this.logger.log(
+        `[${this.name}] Chain preparation completed in ${prepDuration}ms`,
+      );
 
-      this.logger.log(`[${this.name}] Execution finished in ${duration}ms.`);
+      // LLM API call phase
+      const apiStartTime = Date.now();
+      this.logger.log(`[${this.name}] Calling LLM API...`);
+      const llmResponse = await this.callLLM(preparedData);
+      const apiDuration = Date.now() - apiStartTime;
+      this.logger.log(
+        `[${this.name}] LLM API call completed in ${apiDuration}ms`,
+      );
+
+      // Response processing phase
+      const processStartTime = Date.now();
+      this.logger.log(`[${this.name}] Processing response...`);
+      const result = await this.processResponse(llmResponse);
+      const processDuration = Date.now() - processStartTime;
+      this.logger.log(
+        `[${this.name}] Response processing completed in ${processDuration}ms`,
+      );
+
+      const duration = Date.now() - startTime;
+      this.logger.log(
+        `[${this.name}] Agent execution finished in ${duration}ms.`,
+      );
       return result;
     } catch (error) {
-      const endTime = Date.now();
-      const duration = endTime - startTime;
+      const duration = Date.now() - startTime;
       this.logger.error(
-        `[${this.name}] Execution failed after ${duration}ms. Error: ${error.message}`,
+        `[${this.name}] Agent execution failed after ${duration}ms.`,
         error.stack,
       );
       throw error;
