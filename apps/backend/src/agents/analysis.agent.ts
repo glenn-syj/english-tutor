@@ -1,18 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ChatPromptTemplate, PromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { z } from 'zod';
 import {
   OutputFixingParser,
   StructuredOutputParser,
 } from 'langchain/output_parsers';
-import { AbstractAgent } from './agent.abstract';
-import { NewsAnalysis, NewsArticle } from '../../../types/src';
+import { AbstractLlmAgent } from './agent.llm.abstract';
+import { NewsAnalysis, NewsArticle, UserProfile } from '../../../types/src';
 import {
   ChatGoogleGenerativeAI,
   GoogleGenerativeAIEmbeddings,
 } from '@langchain/google-genai';
 import { ProfileService } from '../profile/profile.service';
+import { StringOutputParser } from '@langchain/core/output_parsers';
 
 // This schema defines the structure of the analysis result.
 // It must match the NewsAnalysis type.
@@ -38,10 +39,11 @@ const analysisSchema = z.object({
 });
 
 @Injectable()
-export class AnalysisAgent extends AbstractAgent {
+export class AnalysisAgent extends AbstractLlmAgent {
   protected embeddings: GoogleGenerativeAIEmbeddings;
   private parser = StructuredOutputParser.fromZodSchema(analysisSchema);
   private outputFixingParser: OutputFixingParser<any>;
+  private userProfile: UserProfile;
 
   constructor(
     configService: ConfigService,
@@ -49,8 +51,13 @@ export class AnalysisAgent extends AbstractAgent {
   ) {
     super(
       configService,
-      'News Analyst',
-      'Analyzes news articles to provide summaries, vocabulary, and questions.',
+      'Analysis Agent',
+      'Analyzes news articles and provides structured summaries.',
+      {
+        temperature: 0.1,
+        topP: 0.2,
+        topK: 20,
+      },
     );
     this.llm = new ChatGoogleGenerativeAI({
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
@@ -64,50 +71,10 @@ export class AnalysisAgent extends AbstractAgent {
     this.outputFixingParser = OutputFixingParser.fromLLM(this.llm, this.parser);
   }
 
-  async analyze(article: NewsArticle): Promise<NewsAnalysis> {
-    const analysisPrompt = PromptTemplate.fromTemplate(
-      `Please analyze the following news article for an English learner.
-      Article text: """{fullText}"""
-      Based on the article, provide:
-      1. A concise summary of the article.
-      2. A list of 5-10 key vocabulary words with their definitions.
-      3. A list of 3-5 open-ended discussion questions related to the article's topic.
-      Format the output as a JSON object with keys "summary", "vocabulary", and "questions".`,
-    );
-
-    const analysisChain = analysisPrompt.pipe(this.llm).pipe(this.parser);
-
-    try {
-      const result = await analysisChain.invoke({
-        fullText: article.fullText,
-      });
-      return result as NewsAnalysis;
-    } catch (error) {
-      if (
-        error.llmOutput &&
-        typeof error.llmOutput === 'string' &&
-        error.llmOutput.includes('```json')
-      ) {
-        console.log('Attempting to fix JSON markdown...');
-        const jsonMatch = error.llmOutput.match(/```json\n([\s\S]*)\n```/);
-        if (jsonMatch && jsonMatch[1]) {
-          try {
-            return JSON.parse(jsonMatch[1]);
-          } catch (parseError) {
-            console.error('Failed to parse extracted JSON.', parseError);
-            throw error; // Throw original error if parsing still fails
-          }
-        }
-      }
-      throw error;
-    }
-  }
-
-  async run(article: NewsArticle): Promise<NewsAnalysis> {
-    console.log('--- AnalysisAgent Start ---');
-    console.log(`[AnalysisAgent] Received article: "${article.title}"`);
-    const userProfile = await this.profileService.getProfile();
-
+  protected async prepareChain(context: {
+    article: string;
+    learningLevel: string;
+  }): Promise<any> {
     const prompt = ChatPromptTemplate.fromMessages([
       [
         'system',
@@ -131,36 +98,77 @@ Your task is to analyze the provided news article and generate a structured JSON
 Your output MUST strictly adhere to the JSON format described below.
 {format_instructions}`,
       ],
-      ['human', 'Article:\n{article}'],
+      ['human', '{article}'],
     ]);
 
-    const chain = prompt.pipe(this.llm).pipe(this.outputFixingParser);
-
-    try {
-      const result = await chain.invoke({
-        article: JSON.stringify(article),
-        learningLevel: userProfile.learningLevel,
+    return {
+      prompt,
+      context: {
+        article: context.article,
+        learningLevel: context.learningLevel,
         format_instructions: this.parser.getFormatInstructions(),
-      });
-      console.log(
-        `[AnalysisAgent] Successfully analyzed article. Summary: ${result.summary.substring(0, 50)}...`,
-      );
-      console.log('--- AnalysisAgent End ---');
-      return result;
+      },
+    };
+  }
+
+  protected async callLLM(preparedData: any): Promise<string> {
+    const chain = preparedData.prompt
+      .pipe(this.llm)
+      .pipe(new StringOutputParser());
+    return chain.invoke(preparedData.context);
+  }
+
+  protected async processResponse(llmResponse: string): Promise<NewsAnalysis> {
+    this.logger.log(`Received raw response from LLM.`);
+    try {
+      const cleanedOutput = llmResponse.replace(/```json\n|```/g, '').trim();
+      return (await this.parser.parse(cleanedOutput)) as NewsAnalysis;
     } catch (e) {
-      console.error(
-        'AnalysisAgent failed even with OutputFixingParser. Returning fallback.',
-        e,
+      this.logger.error(
+        `[${this.name}] Parsing failed on the first attempt. Retrying with OutputFixingParser...`,
+        e.stack,
       );
-      const fallbackResult: NewsAnalysis = {
-        summary:
-          "I'm sorry, I had trouble analyzing the article. Let's try talking about something else.",
-        vocabulary: [],
-        questions: ['Could you please suggest another topic?'],
-      };
-      console.log('[AnalysisAgent] Returning fallback analysis.');
-      console.log('--- AnalysisAgent End ---');
-      return fallbackResult;
+      try {
+        return await this.outputFixingParser.parse(llmResponse);
+      } catch (finalError) {
+        this.logger.error(
+          `[${this.name}] OutputFixingParser also failed. Returning fallback analysis.`,
+          finalError.stack,
+        );
+        return {
+          summary:
+            "I'm sorry, I had trouble analyzing the article. Let's try talking about something else.",
+          vocabulary: [],
+          questions: ['Could you please suggest another topic?'],
+        };
+      }
     }
+  }
+
+  async analyze(article: NewsArticle): Promise<NewsAnalysis> {
+    const userProfile = await this.profileService.getProfile();
+    return this.execute({
+      article: JSON.stringify(article),
+      learningLevel: userProfile.learningLevel,
+    });
+  }
+
+  async run(article: NewsArticle): Promise<NewsAnalysis> {
+    this.logger.log('--- AnalysisAgent Start ---');
+    this.logger.log(`Received article: "${article.title}"`);
+
+    const userProfile = await this.profileService.getProfile();
+    const chainData = await this.prepareChain({
+      article: JSON.stringify(article),
+      learningLevel: userProfile.learningLevel,
+    });
+    const rawResult = await this.callLLM(chainData);
+    const result = await this.processResponse(rawResult);
+
+    this.logger.log(
+      `Successfully analyzed article. Summary: ${result.summary.substring(0, 50)}...`,
+    );
+    this.logger.log('--- AnalysisAgent End ---');
+    return result;
   }
 }
