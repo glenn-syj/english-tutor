@@ -214,7 +214,7 @@ export class OrchestratorService {
       user_message: messageForConversation,
     };
 
-    const response = await this.conversationAgent.execute(context);
+    const response = await this.conversationAgent.run(context);
 
     // Convert the response into an async iterable of chunks
     const conversationStream = (async function* () {
