@@ -23,7 +23,7 @@ export abstract class AbstractLlmAgent<
     super(configService, name, description);
     this.llm = new ChatGoogleGenerativeAI({
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.0-flash-lite',
       temperature: 0.2,
       topK: 32,
       topP: 0.25,
