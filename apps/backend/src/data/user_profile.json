@@ -1,4 +1,5 @@
 {
+  "id": "default-user-id",
   "name": "Glenn",
   "interests": ["Tech", "Travel"],
   "learningLevel": "Intermediate",
