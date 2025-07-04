@@ -38,6 +38,7 @@ export interface NoCorrectionNeeded {
 export type Correction = CorrectionFeedback | NoCorrectionNeeded;
 
 export interface UserProfile {
+  id: string;
   name: string;
   interests: string[];
   learningLevel: string;
@@ -58,4 +59,23 @@ export interface NewsAnalysis {
     definition: string;
   }[];
   questions: string[];
+}
+
+export interface RelevantContext {
+  conversations: {
+    document: string;
+    metadata: any;
+  }[];
+  learningMaterials: {
+    document: string;
+    metadata: any;
+  }[];
+  newsArticles: {
+    document: string;
+    metadata: any;
+  }[];
+  correctionFeedback: {
+    document: string;
+    metadata: any;
+  }[];
 }
