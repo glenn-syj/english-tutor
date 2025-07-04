@@ -99,6 +99,9 @@ describe('OrchestratorService', () => {
             searchRelevantContext: jest
               .fn()
               .mockResolvedValue(mockRelevantContext),
+            addCorrectionFeedback: jest.fn().mockResolvedValue(undefined),
+            addConversationHistory: jest.fn().mockResolvedValue(undefined),
+            addNewsArticle: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
