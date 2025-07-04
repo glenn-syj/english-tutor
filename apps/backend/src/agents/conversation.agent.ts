@@ -59,6 +59,7 @@ Your purpose is to conduct a realistic and effective mock speaking test.
 - User Profile Details (JSON): {user_profile}
 - User's Stated Interests: {user_interests}
 - Topic of Conversation (News Analysis): {news_analysis}
+- Relevant Context: {relevant_context}
 ---`,
       ],
       new MessagesPlaceholder('chat_history'),

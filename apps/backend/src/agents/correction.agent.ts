@@ -38,7 +38,10 @@ const correctionSchema = z.object({
     ),
 });
 
-type CorrectionAgentContext = { message: string };
+type CorrectionAgentContext = {
+  message: string;
+  correctionFeedback?: string;
+};
 type CorrectionAgentCallOutput = {
   llmResponse: string;
   originalMessage: string;
@@ -72,6 +75,7 @@ export class CorrectionAgent extends AbstractLlmAgent<
         'system',
         `You are an expert English language examiner, specializing in speaking tests like IELTS or OPIC. Your goal is to provide feedback that helps the user achieve a higher score.
 
+${context.correctionFeedback ? `Consider the user's past correction feedback for personalized advice: ${context.correctionFeedback}\n` : ''}
 Analyze the user's message based on key scoring criteria:
 - **Grammatical Range and Accuracy**: Are there errors? Is there a variety of complex structures?
 - **Lexical Resource (Vocabulary)**: Is the vocabulary precise and sophisticated? Are idiomatic expressions used correctly?
@@ -98,6 +102,9 @@ Your response MUST be a single, valid, and complete JSON object that strictly fo
       context: {
         message: message,
         format_instructions: this.parser.getFormatInstructions(),
+        ...(context.correctionFeedback && {
+          correctionFeedback: context.correctionFeedback,
+        }),
       },
       originalMessage: message,
     };
