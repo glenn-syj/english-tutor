@@ -8,12 +8,12 @@
   - [x] **17.2. `VectorStoreService` 모듈 생성**: `apps/backend/src/storage/` 내에 `VectorStoreService` 또는 유사한 이름의 모듈을 생성하여 ChromaClient 초기화 및 관리 로직 구현.
   - [x] **17.3. ChromaDB 데이터 저장 경로 설정**: 로컬 파일 시스템 또는 환경 변수를 통한 원격 ChromaDB 서버 연결 설정.
 
-- [ ] **18. 데이터 스키마 설계 및 컬렉션 정의**
+- [x] **18. 데이터 스키마 설계 및 컬렉션 정의**
 
-  - [ ] **18.1. 대화 이력 컬렉션 정의**: 사용자 대화 이력을 저장하기 위한 `conversations` 컬렉션 스키마 설계 (`userId`, `timestamp`, `sender`, `text`, `embedding`).
-  - [ ] **18.2. 학습 자료 컬렉션 정의**: 영어 학습 자료를 저장하기 위한 `learning_materials` 컬렉션 스키마 설계 (`topic`, `level`, `tags`, `content`, `embedding`).
-  - [ ] **18.3. 뉴스 기사 컬렉션 정의 (선택 사항)**: 필요시 뉴스 기사를 저장하기 위한 `news_articles` 컬렉션 스키마 설계 (`title`, `url`, `publishedDate`, `summary`, `fullText`, `embedding`).
-  - [ ] **18.4. 교정 피드백 컬렉션 정의**: 사용자의 교정 피드백 (원문, 교정문, 교정 유형, 설명 등)을 저장하기 위한 `correction_feedback` 컬렉션 스키마 설계 (`userId`, `timestamp`, `originalText`, `correctedText`, `correctionType`, `explanation`, `embedding`).
+  - [x] **18.1. 대화 이력 컬렉션 정의**: 사용자 대화 이력을 저장하기 위한 `conversations` 컬렉션 스키마 설계 (`userId`, `timestamp`, `sender`, `text`, `embedding`).
+  - [x] **18.2. 학습 자료 컬렉션 정의**: 영어 학습 자료를 저장하기 위한 `learning_materials` 컬렉션 스키마 설계 (`topic`, `level`, `tags`, `content`, `embedding`).
+  - [x] **18.3. 뉴스 기사 컬렉션 정의 (선택 사항)**: 필요시 뉴스 기사를 저장하기 위한 `news_articles` 컬렉션 스키마 설계 (`title`, `url`, `publishedDate`, `summary`, `fullText`, `embedding`).
+  - [x] **18.4. 교정 피드백 컬렉션 정의**: 사용자의 교정 피드백 (원문, 교정문, 교정 유형, 설명 등)을 저장하기 위한 `correction_feedback` 컬렉션 스키마 설계 (`userId`, `timestamp`, `originalText`, `correctedText`, `correctionType`, `explanation`, `embedding`).
 
 - [ ] **19. 데이터 삽입/업데이트 기능 구현**
 
