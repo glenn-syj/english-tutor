@@ -48,6 +48,7 @@ export class VectorStoreService implements OnModuleInit {
           true,
         ),
         new arrow.Field('text', new arrow.Utf8(), true),
+        new arrow.Field('id', new arrow.Utf8(), true),
         new arrow.Field('userId', new arrow.Utf8(), true),
         new arrow.Field('timestamp', new arrow.Float64(), true),
         new arrow.Field('sender', new arrow.Utf8(), true),
@@ -66,6 +67,13 @@ export class VectorStoreService implements OnModuleInit {
         new arrow.Field('id', new arrow.Utf8(), true),
         new arrow.Field('title', new arrow.Utf8(), true),
         new arrow.Field('source', new arrow.Utf8(), true),
+        new arrow.Field('topic', new arrow.Utf8(), true),
+        new arrow.Field('level', new arrow.Utf8(), true),
+        new arrow.Field(
+          'tags',
+          new arrow.List(new arrow.Field('item', new arrow.Utf8(), true)),
+          true,
+        ),
         // Add other metadata fields for LearningMaterialMetadata if any
       ]);
 
@@ -82,6 +90,8 @@ export class VectorStoreService implements OnModuleInit {
         new arrow.Field('id', new arrow.Utf8(), true),
         new arrow.Field('title', new arrow.Utf8(), true),
         new arrow.Field('url', new arrow.Utf8(), true),
+        new arrow.Field('publishedDate', new arrow.Utf8(), true),
+        new arrow.Field('source', new arrow.Utf8(), true),
         // Add other metadata fields for NewsArticleMetadata if any
       ]);
 
@@ -98,6 +108,10 @@ export class VectorStoreService implements OnModuleInit {
         new arrow.Field('id', new arrow.Utf8(), true),
         new arrow.Field('originalText', new arrow.Utf8(), true),
         new arrow.Field('correctedText', new arrow.Utf8(), true),
+        new arrow.Field('userId', new arrow.Utf8(), true),
+        new arrow.Field('timestamp', new arrow.Float64(), true),
+        new arrow.Field('correction_type', new arrow.Utf8(), true),
+        new arrow.Field('explanation', new arrow.Utf8(), true),
         // Add other metadata fields for CorrectionFeedbackMetadata if any
       ]);
 
@@ -222,6 +236,7 @@ export class VectorStoreService implements OnModuleInit {
       metadata: CorrectionFeedbackMetadata;
     }[];
   }> {
+    this.logger.log(`Searching relevant context for query: "${query}"`);
     const queryVector = await this.embeddings.embedQuery(query);
 
     const results: {
@@ -257,43 +272,57 @@ export class VectorStoreService implements OnModuleInit {
           sender: res.sender,
         } as ConversationMetadata,
       }));
+      this.logger.log(
+        `Found ${results.conversations.length} conversation results.`,
+      );
     }
 
     // 학습 자료 검색
     if (this.collections.learning_materials) {
-      const materialResults = await this.collections.learning_materials
+      const learningMaterialResults = await this.collections.learning_materials
         .search(queryVector)
-        .limit(2)
+        .limit(3)
         .toArray();
-      results.learningMaterials = materialResults.map((res: any) => ({
+      results.learningMaterials = learningMaterialResults.map((res: any) => ({
         document: res.text,
         metadata: { ...res } as LearningMaterialMetadata,
       }));
+      this.logger.log(
+        `Found ${results.learningMaterials.length} learning material results.`,
+      );
     }
 
     // 뉴스 기사 검색
     if (this.collections.news_articles) {
-      const newsResults = await this.collections.news_articles
+      const newsArticleResults = await this.collections.news_articles
         .search(queryVector)
-        .limit(1)
+        .limit(3)
         .toArray();
-      results.newsArticles = newsResults.map((res: any) => ({
+      results.newsArticles = newsArticleResults.map((res: any) => ({
         document: res.text,
         metadata: { ...res } as NewsArticleMetadata,
       }));
+      this.logger.log(
+        `Found ${results.newsArticles.length} news article results.`,
+      );
     }
 
-    // 교정 피드백 검색 (사용자 ID 필터링)
+    // 교정 피드백 검색
     if (this.collections.correction_feedback) {
-      const correctionResults = await this.collections.correction_feedback
-        .search(queryVector)
-        .where(`"userId" = "${userId}" `)
-        .limit(2)
-        .toArray();
-      results.correctionFeedback = correctionResults.map((res: any) => ({
-        document: res.text,
-        metadata: { ...res } as CorrectionFeedbackMetadata,
-      }));
+      const correctionFeedbackResults =
+        await this.collections.correction_feedback
+          .search(queryVector)
+          .limit(3)
+          .toArray();
+      results.correctionFeedback = correctionFeedbackResults.map(
+        (res: any) => ({
+          document: res.text,
+          metadata: { ...res } as CorrectionFeedbackMetadata,
+        }),
+      );
+      this.logger.log(
+        `Found ${results.correctionFeedback.length} correction feedback results.`,
+      );
     }
 
     return results;
