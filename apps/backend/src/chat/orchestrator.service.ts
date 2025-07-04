@@ -87,6 +87,12 @@ export class OrchestratorService {
       ? [...history, newArticleSystemMessage, newChatMessage]
       : [...history, newChatMessage];
 
+    // Add new chat messages to VectorDB
+    await this.vectorStoreService.addConversationHistory(
+      userProfile.id,
+      [newChatMessage], // Only add the new user message to history, not the whole stream
+    );
+
     // 3. Generate and yield from the response stream
     yield* this._generateResponseStream({
       newArticleSystemMessage,
@@ -183,6 +189,21 @@ export class OrchestratorService {
         userProfile: userProfile,
       });
 
+      // Add news article to VectorDB
+      await this.vectorStoreService.addNewsArticle(
+        newsArticle.url, // Using URL as a unique ID for news articles
+        newsArticle.fullText,
+        {
+          title: newsArticle.title,
+          url: newsArticle.url,
+          publishedDate: new Date().toISOString(), // Assuming current date if not available from newsArticle
+          source: newsArticle.source,
+        },
+      );
+      this.logger.log(
+        `Added news article with url: ${newsArticle.url} to VectorDB.`,
+      );
+
       const newArticleSystemMessage: ChatMessage = {
         sender: 'system',
         text: `${ARTICLE_SYSTEM_MESSAGE_PREFIX}${JSON.stringify(newsAnalysis)}`,
@@ -212,6 +233,24 @@ export class OrchestratorService {
         .map((fb) => `Original: ${fb.document}`)
         .join('\n'),
     });
+
+    // Add correction feedback to VectorDB if a suggestion was made
+    if (correction.has_suggestion) {
+      await this.vectorStoreService.addCorrectionFeedback(
+        `${userProfile.id}-${new Date().toISOString()}`,
+        correction.original,
+        correction.corrected,
+        {
+          userId: userProfile.id,
+          timestamp: new Date().toISOString(),
+          originalText: correction.original,
+          correctedText: correction.corrected,
+          correction_type: correction.correction_type,
+          explanation: correction.explanation,
+        },
+      );
+      this.logger.log(`Added new correction feedback to VectorDB.`);
+    }
 
     // 2. Decide which message to use for the conversation context.
     // Use the corrected message if available, otherwise use the original.
