@@ -13,18 +13,21 @@
   - [ ] **18.1. 대화 이력 컬렉션 정의**: 사용자 대화 이력을 저장하기 위한 `conversations` 컬렉션 스키마 설계 (`userId`, `timestamp`, `sender`, `text`, `embedding`).
   - [ ] **18.2. 학습 자료 컬렉션 정의**: 영어 학습 자료를 저장하기 위한 `learning_materials` 컬렉션 스키마 설계 (`topic`, `level`, `tags`, `content`, `embedding`).
   - [ ] **18.3. 뉴스 기사 컬렉션 정의 (선택 사항)**: 필요시 뉴스 기사를 저장하기 위한 `news_articles` 컬렉션 스키마 설계 (`title`, `url`, `publishedDate`, `summary`, `fullText`, `embedding`).
+  - [ ] **18.4. 교정 피드백 컬렉션 정의**: 사용자의 교정 피드백 (원문, 교정문, 교정 유형, 설명 등)을 저장하기 위한 `correction_feedback` 컬렉션 스키마 설계 (`userId`, `timestamp`, `originalText`, `correctedText`, `correctionType`, `explanation`, `embedding`).
 
 - [ ] **19. 데이터 삽입/업데이트 기능 구현**
 
   - [ ] **19.1. 대화 이력 저장 기능**: `OrchestratorService` 또는 `ChatService`에서 대화가 완료될 때마다 대화 이력을 `conversations` 컬렉션에 저장하는 기능 구현.
   - [ ] **19.2. 학습 자료 추가 기능**: 관리자 또는 특정 유틸리티를 통해 새로운 학습 자료를 `learning_materials` 컬렉션에 추가하는 기능 구현.
   - [ ] **19.3. 뉴스 기사 추가 기능 (선택 사항)**: 뉴스 스크래핑 또는 수동으로 뉴스 기사를 `news_articles` 컬렉션에 추가하는 기능 구현.
+  - [ ] **19.4. 교정 피드백 저장 기능**: `CorrectionAgent` 또는 관련 서비스에서 교정 작업 완료 후, 교정 피드백(`originalText`, `correctedText`, `correctionType`, `explanation` 등)을 `correction_feedback` 컬렉션에 저장하는 기능 구현.
 
 - [ ] **20. 데이터 검색 기능 구현 및 LLM 통합**
 
   - [ ] **20.1. 관련 컨텍스트 검색 로직**: `VectorStoreService` 내에 사용자 질의 및 대화 컨텍스트에 기반하여 각 컬렉션에서 관련성 높은 정보를 검색하는 로직 구현.
   - [ ] **20.2. LLM 프롬프트에 컨텍스트 주입**: 검색된 관련 정보를 `OrchestratorService` 또는 `ChatService`의 LLM 프롬프트에 동적으로 주입하여 답변의 품질과 관련성을 높이도록 로직 수정.
   - [ ] **20.3. RAG(Retrieval Augmented Generation) 아키텍처 기반 마련**: LLM 응답 생성 전 관련 정보를 검색하고 이를 참조하도록 하는 RAG 패턴 구현의 기반을 마련.
+  - [ ] **20.4. 교정 컨텍스트 활용**: 사용자의 이전 교정 피드백을 `correction_feedback` 컬렉션에서 검색하여 `CorrectionAgent` 또는 `ConversationAgent`의 프롬프트에 주입, 개인화된 교정 및 설명을 생성하도록 활용.
 
 - [ ] **21. 통합 테스트 및 성능 검증**
   - [ ] **21.1. VectorDB 통합 기능 테스트**: 데이터 삽입, 검색, LLM 통합 시나리오에 대한 통합 테스트 케이스 작성 및 실행.
