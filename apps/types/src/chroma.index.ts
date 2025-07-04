@@ -22,6 +22,6 @@ export interface CorrectionFeedbackMetadata {
   timestamp: string;
   originalText: string;
   correctedText: string;
-  correctionType?: string; // 예: grammar, spelling, vocabulary, style
+  correction_type?: string; // 예: grammar, spelling, vocabulary, style
   explanation?: string;
 }
