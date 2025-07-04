@@ -1,7 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Collection, ChromaClient } from 'chromadb';
+import { connect, Table } from '@lancedb/lancedb';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
+import * as arrow from 'apache-arrow';
 import {
   ConversationMetadata,
   LearningMaterialMetadata,
@@ -13,24 +14,16 @@ import { ChatMessage } from '../../../types/src';
 @Injectable()
 export class VectorStoreService implements OnModuleInit {
   private readonly logger = new Logger(VectorStoreService.name);
-  private chromaClient: ChromaClient;
+  private db: any; // LanceDB database connection
   private embeddings: GoogleGenerativeAIEmbeddings;
   private collections: {
-    conversations?: Collection;
-    learning_materials?: Collection;
-    news_articles?: Collection;
-    correction_feedback?: Collection;
+    conversations?: Table;
+    learning_materials?: Table;
+    news_articles?: Table;
+    correction_feedback?: Table;
   } = {};
 
   constructor(private readonly configService: ConfigService) {
-    // ChromaClient 초기화 (로컬 경로 또는 환경 변수 사용)
-    const chromaPath =
-      this.configService.get<string>('CHROMA_DB_PATH') || './chroma_data';
-    this.chromaClient = new ChromaClient({
-      path: chromaPath,
-    });
-    this.logger.log(`ChromaDB initialized with path: ${chromaPath}`);
-
     this.embeddings = new GoogleGenerativeAIEmbeddings({
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
       model: 'embedding-001', // 또는 적절한 임베딩 모델
@@ -38,45 +31,113 @@ export class VectorStoreService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    // 모듈 초기화 시 필요한 컬렉션 생성 등 추가 설정
+    const dbPath =
+      this.configService.get<string>('LANCEDB_PATH') || './lancedb_data';
+    this.db = await connect(dbPath);
+    this.logger.log(`LanceDB initialized with path: ${dbPath}`);
+
     try {
-      this.collections.conversations =
-        await this.chromaClient.getOrCreateCollection({
-          name: 'conversations',
-          metadata: { description: 'User conversation history' },
-        });
-      this.logger.log(`ChromaDB 'conversations' collection ensured.`);
+      // Define schemas for each collection
+      const conversationSchema = new arrow.Schema([
+        new arrow.Field(
+          'vector',
+          new arrow.FixedSizeList(
+            768,
+            new arrow.Field('item', new arrow.Float32(), true),
+          ),
+          true,
+        ),
+        new arrow.Field('text', new arrow.Utf8(), true),
+        new arrow.Field('userId', new arrow.Utf8(), true),
+        new arrow.Field('timestamp', new arrow.Float64(), true),
+        new arrow.Field('sender', new arrow.Utf8(), true),
+      ]);
 
-      this.collections.learning_materials =
-        await this.chromaClient.getOrCreateCollection({
-          name: 'learning_materials',
-          metadata: { description: 'English learning materials' },
-        });
-      this.logger.log(`ChromaDB 'learning_materials' collection ensured.`);
+      const learningMaterialSchema = new arrow.Schema([
+        new arrow.Field(
+          'vector',
+          new arrow.FixedSizeList(
+            768,
+            new arrow.Field('item', new arrow.Float32(), true),
+          ),
+          true,
+        ),
+        new arrow.Field('text', new arrow.Utf8(), true),
+        new arrow.Field('id', new arrow.Utf8(), true),
+        new arrow.Field('title', new arrow.Utf8(), true),
+        new arrow.Field('source', new arrow.Utf8(), true),
+        // Add other metadata fields for LearningMaterialMetadata if any
+      ]);
 
-      this.collections.news_articles =
-        await this.chromaClient.getOrCreateCollection({
-          name: 'news_articles',
-          metadata: { description: 'News articles for analysis' },
-        });
-      this.logger.log(`ChromaDB 'news_articles' collection ensured.`);
+      const newsArticleSchema = new arrow.Schema([
+        new arrow.Field(
+          'vector',
+          new arrow.FixedSizeList(
+            768,
+            new arrow.Field('item', new arrow.Float32(), true),
+          ),
+          true,
+        ),
+        new arrow.Field('text', new arrow.Utf8(), true),
+        new arrow.Field('id', new arrow.Utf8(), true),
+        new arrow.Field('title', new arrow.Utf8(), true),
+        new arrow.Field('url', new arrow.Utf8(), true),
+        // Add other metadata fields for NewsArticleMetadata if any
+      ]);
 
-      this.collections.correction_feedback =
-        await this.chromaClient.getOrCreateCollection({
-          name: 'correction_feedback',
-          metadata: { description: 'User correction feedback and analysis' },
-        });
-      this.logger.log(`ChromaDB 'correction_feedback' collection ensured.`);
+      const correctionFeedbackSchema = new arrow.Schema([
+        new arrow.Field(
+          'vector',
+          new arrow.FixedSizeList(
+            768,
+            new arrow.Field('item', new arrow.Float32(), true),
+          ),
+          true,
+        ),
+        new arrow.Field('text', new arrow.Utf8(), true),
+        new arrow.Field('id', new arrow.Utf8(), true),
+        new arrow.Field('originalText', new arrow.Utf8(), true),
+        new arrow.Field('correctedText', new arrow.Utf8(), true),
+        // Add other metadata fields for CorrectionFeedbackMetadata if any
+      ]);
+
+      this.collections.conversations = await this.db.createTable(
+        'conversations',
+        [], // Empty initial data
+        { schema: conversationSchema, existOk: true },
+      );
+      this.logger.log(`LanceDB 'conversations' collection ensured.`);
+
+      this.collections.learning_materials = await this.db.createTable(
+        'learning_materials',
+        [],
+        { schema: learningMaterialSchema, existOk: true },
+      );
+      this.logger.log(`LanceDB 'learning_materials' collection ensured.`);
+
+      this.collections.news_articles = await this.db.createTable(
+        'news_articles',
+        [],
+        { schema: newsArticleSchema, existOk: true },
+      );
+      this.logger.log(`LanceDB 'news_articles' collection ensured.`);
+
+      this.collections.correction_feedback = await this.db.createTable(
+        'correction_feedback',
+        [],
+        { schema: correctionFeedbackSchema, existOk: true },
+      );
+      this.logger.log(`LanceDB 'correction_feedback' collection ensured.`);
     } catch (error) {
       this.logger.error(
-        'Failed to initialize ChromaDB collections:',
+        'Failed to initialize LanceDB collections:',
         error.stack,
       );
     }
   }
 
-  public getClient(): ChromaClient {
-    return this.chromaClient;
+  public getClient(): any {
+    return this.db;
   }
 
   async addConversationHistory(
@@ -86,20 +147,17 @@ export class VectorStoreService implements OnModuleInit {
     if (!this.collections.conversations) {
       throw new Error('Conversations collection not initialized.');
     }
-    const documents = messages.map((m) => m.text);
-    const metadatas: ConversationMetadata[] = messages.map((m) => ({
-      userId: userId,
-      timestamp: m.timestamp,
-      sender: m.sender,
-    }));
-    const ids = messages.map((m) => `${userId}-${m.timestamp}`);
-
-    await this.collections.conversations.add({
-      ids,
-      documents,
-      metadatas,
-      embeddings: await this.embeddings.embedDocuments(documents), // 임베딩 추가
-    });
+    const data = await Promise.all(
+      messages.map(async (m) => ({
+        id: `${userId}-${m.timestamp}`,
+        vector: await this.embeddings.embedQuery(m.text),
+        text: m.text,
+        userId: userId,
+        timestamp: m.timestamp,
+        sender: m.sender,
+      })),
+    );
+    await this.collections.conversations.add(data);
     this.logger.log(
       `Added ${messages.length} conversation messages for user ${userId}.`,
     );
@@ -113,12 +171,9 @@ export class VectorStoreService implements OnModuleInit {
     if (!this.collections.learning_materials) {
       throw new Error('Learning materials collection not initialized.');
     }
-    await this.collections.learning_materials.add({
-      ids: [id],
-      documents: [content],
-      metadatas: [metadata],
-      embeddings: await this.embeddings.embedDocuments([content]), // 임베딩 추가
-    });
+    const vector = await this.embeddings.embedQuery(content);
+    const data = [{ id, vector, text: content, ...metadata }];
+    await this.collections.learning_materials.add(data);
     this.logger.log(`Added learning material with id: ${id}.`);
   }
 
@@ -130,12 +185,9 @@ export class VectorStoreService implements OnModuleInit {
     if (!this.collections.news_articles) {
       throw new Error('News articles collection not initialized.');
     }
-    await this.collections.news_articles.add({
-      ids: [id],
-      documents: [fullText],
-      metadatas: [metadata],
-      embeddings: await this.embeddings.embedDocuments([fullText]), // 임베딩 추가
-    });
+    const vector = await this.embeddings.embedQuery(fullText);
+    const data = [{ id, vector, text: fullText, ...metadata }];
+    await this.collections.news_articles.add(data);
     this.logger.log(`Added news article with id: ${id}.`);
   }
 
@@ -148,13 +200,10 @@ export class VectorStoreService implements OnModuleInit {
     if (!this.collections.correction_feedback) {
       throw new Error('Correction feedback collection not initialized.');
     }
-    const documentContent = `Original: ${originalText}\nCorrected: ${correctedText}`; // 문서 내용
-    await this.collections.correction_feedback.add({
-      ids: [id],
-      documents: [documentContent],
-      metadatas: [metadata],
-      embeddings: await this.embeddings.embedDocuments([documentContent]), // 임베딩 추가
-    });
+    const documentContent = `Original: ${originalText}\nCorrected: ${correctedText}`;
+    const vector = await this.embeddings.embedQuery(documentContent);
+    const data = [{ id, vector, text: documentContent, ...metadata }];
+    await this.collections.correction_feedback.add(data);
     this.logger.log(`Added correction feedback with id: ${id}.`);
   }
 
@@ -173,7 +222,7 @@ export class VectorStoreService implements OnModuleInit {
       metadata: CorrectionFeedbackMetadata;
     }[];
   }> {
-    const queryEmbedding = await this.embeddings.embedQuery(query);
+    const queryVector = await this.embeddings.embedQuery(query);
 
     const results: {
       conversations: { document: string; metadata: ConversationMetadata }[];
@@ -193,68 +242,58 @@ export class VectorStoreService implements OnModuleInit {
       correctionFeedback: [],
     };
 
-    // 20.1. 관련 컨텍스트 검색 로직
     // 대화 이력 검색 (사용자 ID 필터링)
-    if (this.collections.conversations && userId) {
-      const conversationResults = await this.collections.conversations.query({
-        queryEmbeddings: [queryEmbedding],
-        nResults: 3,
-        where: { userId },
-      });
-      results.conversations = conversationResults.documents[0].map(
-        (doc, index) => ({
-          document: doc,
-          metadata: conversationResults.metadatas[0][
-            index
-          ] as ConversationMetadata,
-        }),
-      );
+    if (this.collections.conversations) {
+      const conversationResults = await this.collections.conversations
+        .search(queryVector)
+        .where(`"userId" = "${userId}" `)
+        .limit(3)
+        .toArray();
+      results.conversations = conversationResults.map((res: any) => ({
+        document: res.text,
+        metadata: {
+          userId: res.userId,
+          timestamp: res.timestamp,
+          sender: res.sender,
+        } as ConversationMetadata,
+      }));
     }
 
     // 학습 자료 검색
     if (this.collections.learning_materials) {
-      const materialResults = await this.collections.learning_materials.query({
-        queryEmbeddings: [queryEmbedding],
-        nResults: 2,
-      });
-      results.learningMaterials = materialResults.documents[0].map(
-        (doc, index) => ({
-          document: doc,
-          metadata: materialResults.metadatas[0][
-            index
-          ] as LearningMaterialMetadata,
-        }),
-      );
+      const materialResults = await this.collections.learning_materials
+        .search(queryVector)
+        .limit(2)
+        .toArray();
+      results.learningMaterials = materialResults.map((res: any) => ({
+        document: res.text,
+        metadata: { ...res } as LearningMaterialMetadata,
+      }));
     }
 
     // 뉴스 기사 검색
     if (this.collections.news_articles) {
-      const newsResults = await this.collections.news_articles.query({
-        queryEmbeddings: [queryEmbedding],
-        nResults: 1,
-      });
-      results.newsArticles = newsResults.documents[0].map((doc, index) => ({
-        document: doc,
-        metadata: newsResults.metadatas[0][index] as NewsArticleMetadata,
+      const newsResults = await this.collections.news_articles
+        .search(queryVector)
+        .limit(1)
+        .toArray();
+      results.newsArticles = newsResults.map((res: any) => ({
+        document: res.text,
+        metadata: { ...res } as NewsArticleMetadata,
       }));
     }
 
     // 교정 피드백 검색 (사용자 ID 필터링)
-    if (this.collections.correction_feedback && userId) {
-      const correctionResults =
-        await this.collections.correction_feedback.query({
-          queryEmbeddings: [queryEmbedding],
-          nResults: 2,
-          where: { userId },
-        });
-      results.correctionFeedback = correctionResults.documents[0].map(
-        (doc, index) => ({
-          document: doc,
-          metadata: correctionResults.metadatas[0][
-            index
-          ] as CorrectionFeedbackMetadata,
-        }),
-      );
+    if (this.collections.correction_feedback) {
+      const correctionResults = await this.collections.correction_feedback
+        .search(queryVector)
+        .where(`"userId" = "${userId}" `)
+        .limit(2)
+        .toArray();
+      results.correctionFeedback = correctionResults.map((res: any) => ({
+        document: res.text,
+        metadata: { ...res } as CorrectionFeedbackMetadata,
+      }));
     }
 
     return results;
