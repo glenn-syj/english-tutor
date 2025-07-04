@@ -11,9 +11,11 @@ import {
   NewsAnalysis,
   Correction,
   UserProfile,
+  RelevantContext,
 } from '../../../types/src';
 import { Readable } from 'stream';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
+import { VectorStoreService } from '../storage/vector-store.service';
 
 const ARTICLE_SYSTEM_MESSAGE_PREFIX = 'SYSTEM_ARTICLE:';
 
@@ -40,6 +42,7 @@ export class OrchestratorService {
     private readonly correctionAgent: CorrectionAgent,
     private readonly conversationAgent: ConversationAgent,
     private readonly profileService: ProfileService,
+    private readonly vectorStoreService: VectorStoreService,
   ) {}
 
   async process(history: ChatMessage[], message: string): Promise<Readable> {
@@ -69,6 +72,12 @@ export class OrchestratorService {
       userProfile,
     );
 
+    // 2.1. Retrieve relevant context using vector store
+    const relevantContext = await this.vectorStoreService.searchRelevantContext(
+      message,
+      userProfile.id, // Assuming userProfile has an ID
+    );
+
     const newChatMessage: ChatMessage = {
       sender: 'user',
       text: message,
@@ -85,6 +94,7 @@ export class OrchestratorService {
       fullHistory,
       userProfile,
       newsAnalysis,
+      relevantContext,
     });
 
     this.logger.log('--- Orchestrator End ---');
@@ -96,12 +106,14 @@ export class OrchestratorService {
     fullHistory,
     userProfile,
     newsAnalysis,
+    relevantContext,
   }: {
     newArticleSystemMessage: ChatMessage | null;
     message: string;
     fullHistory: ChatMessage[];
     userProfile: UserProfile;
     newsAnalysis: NewsAnalysis | null;
+    relevantContext: RelevantContext;
   }): AsyncGenerator<string, void, unknown> {
     // Yield system article if it's new
     if (newArticleSystemMessage) {
@@ -120,6 +132,7 @@ export class OrchestratorService {
         fullHistory,
         userProfile,
         newsAnalysis,
+        relevantContext,
       );
 
     // Yield correction
@@ -190,9 +203,15 @@ export class OrchestratorService {
     history: ChatMessage[],
     userProfile: UserProfile,
     newsAnalysis: NewsAnalysis | null,
+    relevantContext: RelevantContext,
   ): Promise<[Correction | null, AsyncIterable<string>]> {
     // 1. Run correction first and wait for the result.
-    const correction = await this.correctionAgent.run({ message });
+    const correction = await this.correctionAgent.run({
+      message,
+      correctionFeedback: relevantContext.correctionFeedback
+        .map((fb) => `Original: ${fb.document}`)
+        .join('\n'),
+    });
 
     // 2. Decide which message to use for the conversation context.
     // Use the corrected message if available, otherwise use the original.
@@ -203,6 +222,7 @@ export class OrchestratorService {
 
     // 3. Run conversation agent with the chosen message.
     const langChainHistory = convertToLangChainMessages(history);
+
     const context = {
       user_name: userProfile.name,
       user_profile: JSON.stringify(userProfile),
@@ -212,6 +232,7 @@ export class OrchestratorService {
         : 'No news article is being discussed in this conversation.',
       chat_history: langChainHistory,
       user_message: messageForConversation,
+      relevant_context: JSON.stringify(relevantContext), // Add relevant context
     };
 
     const response = await this.conversationAgent.run(context);
