@@ -6,6 +6,8 @@ import { CorrectionAgent } from '../agents/correction.agent';
 import { ConversationAgent } from '../agents/conversation.agent';
 import { ProfileService } from '../profile/profile.service';
 import { Readable } from 'stream';
+import { VectorStoreService } from '../storage/vector-store.service';
+import { RelevantContext } from '../../../types/src';
 
 // Mock data
 const mockUserProfile = {
@@ -13,6 +15,7 @@ const mockUserProfile = {
   interests: ['testing', 'nestjs'],
   learningLevel: 'advanced',
   recentCorrections: [],
+  id: 'test-user-id',
 };
 
 const mockNewsArticle = {
@@ -36,6 +39,23 @@ const mockCorrection = {
   correction_type: 'Grammar' as const,
 };
 
+// New mock for RelevantContext
+const mockRelevantContext: RelevantContext = {
+  conversations: [],
+  learningMaterials: [],
+  newsArticles: [],
+  correctionFeedback: [
+    {
+      document: 'Original: I went to home. Corrected: I went home.',
+      metadata: {
+        id: '1',
+        originalText: 'I went to home.',
+        correctedText: 'I went home.',
+      },
+    },
+  ],
+};
+
 describe('OrchestratorService', () => {
   let service: OrchestratorService;
   let newsAgent: NewsAgent;
@@ -43,6 +63,7 @@ describe('OrchestratorService', () => {
   let correctionAgent: CorrectionAgent;
   let conversationAgent: ConversationAgent;
   let profileService: ProfileService;
+  let vectorStoreService: VectorStoreService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -63,15 +84,21 @@ describe('OrchestratorService', () => {
         {
           provide: ConversationAgent,
           useValue: {
-            execute: jest
-              .fn()
-              .mockResolvedValue('Hello from conversation agent'),
+            run: jest.fn().mockResolvedValue('Hello from conversation agent'),
           },
         },
         {
           provide: ProfileService,
           useValue: {
             getProfile: jest.fn().mockResolvedValue(mockUserProfile),
+          },
+        },
+        {
+          provide: VectorStoreService,
+          useValue: {
+            searchRelevantContext: jest
+              .fn()
+              .mockResolvedValue(mockRelevantContext),
           },
         },
       ],
@@ -83,6 +110,7 @@ describe('OrchestratorService', () => {
     correctionAgent = module.get<CorrectionAgent>(CorrectionAgent);
     conversationAgent = module.get<ConversationAgent>(ConversationAgent);
     profileService = module.get<ProfileService>(ProfileService);
+    vectorStoreService = module.get<VectorStoreService>(VectorStoreService);
   });
 
   it('should be defined', () => {
@@ -106,6 +134,10 @@ describe('OrchestratorService', () => {
       const stream = await service.process(history, message);
       const results = await readStream(stream);
 
+      const expectedCorrectionFeedback = mockRelevantContext.correctionFeedback
+        .map((fb) => `Original: ${fb.document}`)
+        .join('\n');
+
       // 1. Verify agent calls
       expect(profileService.getProfile).toHaveBeenCalledTimes(1);
       expect(newsAgent.run).toHaveBeenCalledWith(message);
@@ -113,7 +145,12 @@ describe('OrchestratorService', () => {
         article: mockNewsArticle,
         userProfile: mockUserProfile,
       });
-      expect(correctionAgent.run).toHaveBeenCalledWith({ message });
+      expect(correctionAgent.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: message,
+          correctionFeedback: expectedCorrectionFeedback,
+        }),
+      );
       expect(conversationAgent.run).toHaveBeenCalled();
 
       // 2. Verify stream content
@@ -143,13 +180,22 @@ describe('OrchestratorService', () => {
       const stream = await service.process(history, message);
       await readStream(stream); // Consume the stream to trigger all logic
 
+      const expectedCorrectionFeedback = mockRelevantContext.correctionFeedback
+        .map((fb) => `Original: ${fb.document}`)
+        .join('\n');
+
       // Verify that News and Analysis agents were NOT called
       expect(newsAgent.run).not.toHaveBeenCalled();
       expect(analysisAgent.run).not.toHaveBeenCalled();
 
       // Verify other agents were still called
       expect(profileService.getProfile).toHaveBeenCalledTimes(1);
-      expect(correctionAgent.run).toHaveBeenCalledWith({ message });
+      expect(correctionAgent.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: message,
+          correctionFeedback: expectedCorrectionFeedback,
+        }),
+      );
       expect(conversationAgent.run).toHaveBeenCalled();
     });
   });
@@ -165,6 +211,10 @@ describe('OrchestratorService', () => {
       const stream = await service.process(history, message);
       const results = await readStream(stream);
 
+      const expectedCorrectionFeedback = mockRelevantContext.correctionFeedback
+        .map((fb) => `Original: ${fb.document}`)
+        .join('\n');
+
       // Verify that News and Analysis agents were still called
       expect(newsAgent.run).toHaveBeenCalledWith(message);
       // Analysis agent should not be called if news agent fails
@@ -172,7 +222,12 @@ describe('OrchestratorService', () => {
 
       // Verify other agents were still called
       expect(profileService.getProfile).toHaveBeenCalledTimes(1);
-      expect(correctionAgent.run).toHaveBeenCalledWith({ message });
+      expect(correctionAgent.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: message,
+          correctionFeedback: expectedCorrectionFeedback,
+        }),
+      );
       expect(conversationAgent.run).toHaveBeenCalled();
 
       // Verify stream does not contain system-article but still completes
@@ -180,6 +235,42 @@ describe('OrchestratorService', () => {
       expect(results.find((r) => r.type === 'correction')).toBeDefined();
       expect(results.find((r) => r.type === 'chunk')).toBeDefined();
       expect(results.find((r) => r.type === 'end')).toBeDefined();
+    });
+  });
+
+  describe('process - Relevant Context Integration', () => {
+    it('should call VectorStoreService and pass relevant context to agents', async () => {
+      const history = [];
+      const message = 'How can I improve my English grammar?';
+      const userId = mockUserProfile.id;
+
+      const stream = await service.process(history, message);
+      await readStream(stream);
+
+      // Verify VectorStoreService was called
+      expect(vectorStoreService.searchRelevantContext).toHaveBeenCalledWith(
+        message,
+        userId,
+      );
+
+      // Verify CorrectionAgent received correction feedback from relevant context
+      const expectedCorrectionFeedback = mockRelevantContext.correctionFeedback
+        .map((fb) => `Original: ${fb.document}`)
+        .join('\n');
+
+      expect(correctionAgent.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: message,
+          correctionFeedback: expectedCorrectionFeedback,
+        }),
+      );
+
+      // Verify ConversationAgent received the relevant context
+      expect(conversationAgent.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          relevant_context: JSON.stringify(mockRelevantContext),
+        }),
+      );
     });
   });
 });
