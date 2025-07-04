@@ -8,12 +8,18 @@ importers:
 
   .:
     dependencies:
+      '@langchain/community':
+        specifier: ^0.3.47
+        version: 0.3.47(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.1)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(zod@3.25.67))(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67)))(@langchain/google-genai@0.2.13(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67))))(axios@1.10.0)(chromadb@3.0.6)(ibm-cloud-sdk-core@5.4.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(playwright@1.53.1)(weaviate-client@3.6.2)(ws@8.18.2)
       '@radix-ui/react-icons':
         specifier: ^1.3.2
         version: 1.3.2(react@19.1.0)
       ai:
         specifier: ^4.3.16
         version: 4.3.16(react@19.1.0)(zod@3.25.67)
+      chromadb:
+        specifier: ^3.0.6
+        version: 3.0.6
     devDependencies:
       concurrently:
         specifier: ^8.2.2
@@ -23,7 +29,7 @@ importers:
     dependencies:
       '@langchain/community':
         specifier: ^0.3.47
-        version: 0.3.47(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.1)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(zod@3.25.67))(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67)))(@langchain/google-genai@0.2.13(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67))))(axios@1.10.0)(ibm-cloud-sdk-core@5.4.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(playwright@1.53.1)(weaviate-client@3.6.2)(ws@8.18.2)
+        version: 0.3.47(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.1)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(zod@3.25.67))(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67)))(@langchain/google-genai@0.2.13(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67))))(axios@1.10.0)(chromadb@3.0.6)(ibm-cloud-sdk-core@5.4.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(playwright@1.53.1)(weaviate-client@3.6.2)(ws@8.18.2)
       '@langchain/core':
         specifier: ^0.3.61
         version: 0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67))
@@ -2160,6 +2166,41 @@ packages:
   chownr@3.0.0:
     resolution: {integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==}
     engines: {node: '>=18'}
+
+  chromadb-js-bindings-darwin-arm64@1.0.1:
+    resolution: {integrity: sha512-IyvK0/AauGzaBtDmq/rSPZFGbUGLXpR0y30GXinwfLRitIPHN1S0tuygiULKV8CLQDIa5rOtnucLhfX0ARZIpw==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  chromadb-js-bindings-darwin-x64@1.0.1:
+    resolution: {integrity: sha512-COpf6ESv95D6dHxYF7o3YAkz9aGFazBVFvIEOmYdlMd+O+ClrtUN9sNtrFF7JPXDCwvc4xWiq3NvuhfNGodyqQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  chromadb-js-bindings-linux-arm64-gnu@1.0.1:
+    resolution: {integrity: sha512-M6i5UMMrQWao70Ic3R/QI8IJpvoFfysaLwQ5LDvs77M3TITguImLUk8nRmC+8Vt9e97zIMg2llHMy87gzTUvJA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+
+  chromadb-js-bindings-linux-x64-gnu@1.0.1:
+    resolution: {integrity: sha512-Aw4WB+ojLgwcbopOLz2JnrmoCSRPUPmP9TBz1RUaZ3qTFINoyULkT1l6aD/O7leBZFYxRMLFQRfiCKp5uU+xYg==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+
+  chromadb-js-bindings-win32-x64-msvc@1.0.1:
+    resolution: {integrity: sha512-RNTJMrlUaiwUB6BODV7c5UqKW0EXzSH/vYBT/j7ZcSH2njzl18szDnirozCC4P4FNPKIbx5u1YzWCZZ9RlgjjQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  chromadb@3.0.6:
+    resolution: {integrity: sha512-dQKUX0wzFB9jZafWxNSHh70IJHF/EkUj81ku394WNReNoqd3yzCKh0i85J4EZC7O6TauyjxvlUyoM7T0tNBjKA==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   chrome-trace-event@1.0.4:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
@@ -5787,7 +5828,7 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@langchain/community@0.3.47(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.1)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(zod@3.25.67))(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67)))(@langchain/google-genai@0.2.13(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67))))(axios@1.10.0)(ibm-cloud-sdk-core@5.4.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(playwright@1.53.1)(weaviate-client@3.6.2)(ws@8.18.2)':
+  '@langchain/community@0.3.47(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.1)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(zod@3.25.67))(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67)))(@langchain/google-genai@0.2.13(@langchain/core@0.3.61(openai@5.7.0(ws@8.18.2)(zod@3.25.67))))(axios@1.10.0)(chromadb@3.0.6)(ibm-cloud-sdk-core@5.4.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(playwright@1.53.1)(weaviate-client@3.6.2)(ws@8.18.2)':
     dependencies:
       '@browserbasehq/stagehand': 1.14.0(@playwright/test@1.53.1)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@5.7.0(ws@8.18.2)(zod@3.25.67))(zod@3.25.67)
       '@ibm-cloud/watsonx-ai': 1.6.8
@@ -5806,6 +5847,7 @@ snapshots:
       zod: 3.25.67
     optionalDependencies:
       '@browserbasehq/sdk': 2.6.0
+      chromadb: 3.0.6
       ignore: 5.3.2
       jsonwebtoken: 9.0.2
       lodash: 4.17.21
@@ -7032,6 +7074,31 @@ snapshots:
       fsevents: 2.3.3
 
   chownr@3.0.0: {}
+
+  chromadb-js-bindings-darwin-arm64@1.0.1:
+    optional: true
+
+  chromadb-js-bindings-darwin-x64@1.0.1:
+    optional: true
+
+  chromadb-js-bindings-linux-arm64-gnu@1.0.1:
+    optional: true
+
+  chromadb-js-bindings-linux-x64-gnu@1.0.1:
+    optional: true
+
+  chromadb-js-bindings-win32-x64-msvc@1.0.1:
+    optional: true
+
+  chromadb@3.0.6:
+    dependencies:
+      semver: 7.7.2
+    optionalDependencies:
+      chromadb-js-bindings-darwin-arm64: 1.0.1
+      chromadb-js-bindings-darwin-x64: 1.0.1
+      chromadb-js-bindings-linux-arm64-gnu: 1.0.1
+      chromadb-js-bindings-linux-x64-gnu: 1.0.1
+      chromadb-js-bindings-win32-x64-msvc: 1.0.1
 
   chrome-trace-event@1.0.4: {}
 
