@@ -1,6 +1,12 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ChromaClient } from 'chromadb';
 import { ConfigService } from '@nestjs/config';
+import {
+  ConversationMetadata,
+  LearningMaterialMetadata,
+  NewsArticleMetadata,
+  CorrectionFeedbackMetadata,
+} from '../../../types/src/chroma.index';
 
 @Injectable()
 export class VectorStoreService implements OnModuleInit {
@@ -19,6 +25,36 @@ export class VectorStoreService implements OnModuleInit {
 
   async onModuleInit() {
     // 모듈 초기화 시 필요한 컬렉션 생성 등 추가 설정
+    try {
+      await this.chromaClient.getOrCreateCollection({
+        name: 'conversations',
+        metadata: { description: 'User conversation history' },
+      });
+      this.logger.log(`ChromaDB 'conversations' collection ensured.`);
+
+      await this.chromaClient.getOrCreateCollection({
+        name: 'learning_materials',
+        metadata: { description: 'English learning materials' },
+      });
+      this.logger.log(`ChromaDB 'learning_materials' collection ensured.`);
+
+      await this.chromaClient.getOrCreateCollection({
+        name: 'news_articles',
+        metadata: { description: 'News articles for analysis' },
+      });
+      this.logger.log(`ChromaDB 'news_articles' collection ensured.`);
+
+      await this.chromaClient.getOrCreateCollection({
+        name: 'correction_feedback',
+        metadata: { description: 'User correction feedback and analysis' },
+      });
+      this.logger.log(`ChromaDB 'correction_feedback' collection ensured.`);
+    } catch (error) {
+      this.logger.error(
+        'Failed to initialize ChromaDB collections:',
+        error.stack,
+      );
+    }
   }
 
   public getClient(): ChromaClient {
